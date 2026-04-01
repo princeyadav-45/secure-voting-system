@@ -1,0 +1,832 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecureVote — Admin Face Registration</title>
+
+<!-- face-api.js from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg: #07090f;
+  --surface: #0c1120;
+  --card: #101828;
+  --border: #1a2540;
+  --accent: #f97316;
+  --accent-glow: rgba(249,115,22,0.15);
+  --green: #22c55e;
+  --green-glow: rgba(34,197,94,0.15);
+  --blue: #3b82f6;
+  --red: #ef4444;
+  --text: #cbd5e1;
+  --muted: #3d5070;
+  --white: #f8fafc;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Animated bg */
+.bg-grid {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image: linear-gradient(rgba(249,115,22,0.03) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(249,115,22,0.03) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+.bg-glow {
+  position: fixed; z-index: 0; pointer-events: none;
+  border-radius: 50%; filter: blur(100px); opacity: 0.35;
+}
+.glow1 { width: 600px; height: 400px; background: radial-gradient(#7c2d12, transparent 70%); top: -150px; right: -100px; }
+.glow2 { width: 400px; height: 400px; background: radial-gradient(#14532d, transparent 70%); bottom: -100px; left: -100px; }
+
+.app { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; padding: 24px 16px 80px; }
+
+/* HEADER */
+header {
+  width: 100%; max-width: 640px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: 28px;
+}
+.logo { display: flex; align-items: center; gap: 10px; }
+.logo-icon {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--accent), #c2410c);
+  border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  font-size: 17px; box-shadow: 0 0 20px var(--accent-glow);
+}
+.logo-text { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; color: var(--white); }
+.logo-text span { color: var(--accent); }
+.admin-tag {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  color: var(--accent); border: 1px solid rgba(249,115,22,0.4);
+  padding: 4px 10px; border-radius: 20px; letter-spacing: 2px;
+  background: var(--accent-glow);
+}
+
+/* CARD */
+.card {
+  width: 100%; max-width: 640px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 20px; padding: 30px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+  margin-bottom: 16px;
+  animation: up 0.3s ease;
+}
+@keyframes up { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+
+.card-title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: var(--white); margin-bottom: 4px; }
+.card-sub { font-size: 13px; color: var(--muted); margin-bottom: 22px; }
+
+/* STEPS MINI */
+.mini-steps {
+  display: flex; gap: 0; align-items: center; margin-bottom: 28px;
+}
+.ms {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+}
+.ms-dot {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 2px solid var(--border); background: var(--surface);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted);
+  transition: all 0.3s;
+}
+.ms.active .ms-dot { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); box-shadow: 0 0 12px var(--accent-glow); }
+.ms.done .ms-dot { border-color: var(--green); color: var(--green); background: var(--green-glow); }
+.ms-lbl { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
+.ms.active .ms-lbl { color: var(--accent); }
+.ms.done .ms-lbl { color: var(--green); }
+.ms-line { flex: 1; height: 2px; background: var(--border); margin-bottom: 18px; transition: background 0.3s; }
+.ms-line.done { background: var(--green); }
+
+/* FORM */
+.field { margin-bottom: 14px; }
+.field label { display: block; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 7px; }
+.field input, .field select {
+  width: 100%; background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: 10px; color: var(--white); padding: 12px 14px;
+  font-family: 'DM Sans', sans-serif; font-size: 14px; outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.field input:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.field input::placeholder { color: var(--muted); }
+.field select option { background: var(--card); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* CAMERA AREA */
+.camera-wrap {
+  display: flex; gap: 20px; align-items: flex-start;
+  margin: 16px 0;
+}
+.cam-left { flex-shrink: 0; }
+.cam-ring {
+  position: relative; width: 180px; height: 180px;
+}
+.cam-circle {
+  width: 100%; height: 100%; border-radius: 50%;
+  background: var(--surface); border: 2.5px solid var(--border);
+  overflow: hidden; display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+video#regVideo {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; border-radius: 50%; display: none;
+  transform: scaleX(-1); /* mirror */
+}
+.cam-emoji { font-size: 64px; opacity: 0.2; transition: opacity 0.3s; }
+.cam-spinner {
+  position: absolute; inset: -6px; border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: var(--accent); border-left-color: var(--accent);
+  opacity: 0; transition: opacity 0.3s;
+}
+.scanning .cam-spinner { opacity: 1; animation: spin 1s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+.cam-corner { position: absolute; width: 16px; height: 16px; border-color: var(--accent); border-style: solid; opacity: 0; transition: opacity 0.3s; }
+.scanning .cam-corner { opacity: 1; }
+.cam-corner.tl { top: 7px; left: 7px; border-width: 2px 0 0 2px; border-radius: 2px 0 0 0; }
+.cam-corner.tr { top: 7px; right: 7px; border-width: 2px 2px 0 0; border-radius: 0 2px 0 0; }
+.cam-corner.bl { bottom: 7px; left: 7px; border-width: 0 0 2px 2px; border-radius: 0 0 0 2px; }
+.cam-corner.br { bottom: 7px; right: 7px; border-width: 0 2px 2px 0; border-radius: 0 0 2px 0; }
+.cam-beam {
+  position: absolute; left: 8%; right: 8%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0; box-shadow: 0 0 8px var(--accent); top: 20%;
+}
+.scanning .cam-beam { opacity: 1; animation: beam 1.6s ease-in-out infinite; }
+@keyframes beam { 0%{top:15%} 50%{top:82%} 100%{top:15%} }
+
+.face-dot {
+  position: absolute; width: 10px; height: 10px;
+  border-radius: 50%; background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  bottom: 14px; right: 14px; display: none;
+}
+.cam-right { flex: 1; }
+.cam-status {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted);
+  margin-bottom: 10px; transition: color 0.3s;
+}
+.cam-status.scanning { color: var(--accent); }
+.cam-status.success { color: var(--green); }
+.cam-status.fail { color: var(--red); }
+
+.face-quality {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px; margin-top: 10px;
+}
+.fq-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.fq-row:last-child { margin-bottom: 0; }
+.fq-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 1px; }
+.fq-bar { width: 80px; height: 4px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.fq-fill { height: 100%; border-radius: 4px; background: var(--muted); width: 0%; transition: width 0.5s, background 0.5s; }
+
+/* DESCRIPTOR OUTPUT */
+.descriptor-box {
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: 12px; padding: 16px; margin-top: 16px;
+  display: none;
+}
+.descriptor-box.show { display: block; }
+.desc-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+}
+.desc-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--green); letter-spacing: 2px; text-transform: uppercase; }
+.copy-btn {
+  background: var(--green-glow); border: 1px solid rgba(34,197,94,0.3);
+  color: var(--green); font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; letter-spacing: 1px; padding: 4px 10px;
+  border-radius: 6px; cursor: pointer; transition: all 0.2s;
+}
+.copy-btn:hover { background: rgba(34,197,94,0.25); }
+.desc-code {
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  color: #86efac; word-break: break-all; line-height: 1.7;
+  max-height: 80px; overflow-y: auto; background: rgba(0,0,0,0.3);
+  padding: 10px; border-radius: 8px;
+}
+.desc-code::-webkit-scrollbar { width: 4px; }
+.desc-code::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* PASTE INSTRUCTION */
+.paste-instruction {
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px; padding: 14px 16px; margin-top: 14px;
+  display: none;
+}
+.paste-instruction.show { display: block; }
+.pi-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--accent); letter-spacing: 1px; margin-bottom: 10px; text-transform: uppercase; }
+.pi-step {
+  display: flex; gap: 10px; align-items: flex-start;
+  margin-bottom: 10px; font-size: 13px; color: var(--text);
+}
+.pi-step:last-child { margin-bottom: 0; }
+.pi-num {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--accent-glow); border: 1px solid rgba(249,115,22,0.4);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace; font-size: 10px;
+  color: var(--accent); flex-shrink: 0;
+}
+.code-inline {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px;
+  background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px;
+  color: #fcd34d;
+}
+
+/* REGISTERED LIST */
+.reg-list { display: flex; flex-direction: column; gap: 10px; }
+.reg-item {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px;
+  display: flex; align-items: center; gap: 12px;
+  animation: up 0.3s ease;
+}
+.reg-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--green-glow); border: 1.5px solid var(--green);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.reg-info { flex: 1; }
+.reg-name { font-weight: 600; font-size: 14px; color: var(--white); }
+.reg-id { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); margin-top: 2px; }
+.reg-status {
+  font-family: 'JetBrains Mono', monospace; font-size: 9px;
+  background: var(--green-glow); border: 1px solid rgba(34,197,94,0.3);
+  color: var(--green); padding: 3px 8px; border-radius: 20px; letter-spacing: 1px;
+}
+
+/* ALERT */
+.alert {
+  padding: 11px 13px; border-radius: 10px;
+  font-size: 13px; margin-bottom: 14px;
+  display: flex; gap: 9px; align-items: flex-start; line-height: 1.5;
+}
+.alert-info { background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.25); color: #93c5fd; }
+.alert-warn { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); color: #fcd34d; }
+.alert-success { background: var(--green-glow); border: 1px solid rgba(34,197,94,0.3); color: #86efac; }
+.alert-danger { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); color: #fca5a5; }
+
+/* BUTTON */
+.btn {
+  width: 100%; padding: 13px; border: none; border-radius: 10px;
+  font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700;
+  letter-spacing: 1px; cursor: pointer; transition: all 0.2s;
+}
+.btn-orange {
+  background: var(--accent); color: white;
+  box-shadow: 0 4px 20px var(--accent-glow);
+}
+.btn-orange:hover { background: #ea6c0a; transform: translateY(-1px); }
+.btn-orange:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.btn-outline {
+  background: transparent; border: 1.5px solid var(--border);
+  color: var(--muted); margin-top: 10px;
+}
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+.btn-green-solid {
+  background: var(--green); color: white;
+  box-shadow: 0 4px 20px var(--green-glow);
+}
+.btn-green-solid:hover { background: #16a34a; transform: translateY(-1px); }
+.btn-green-solid:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; margin-right: 7px; vertical-align: middle; }
+
+.hidden { display: none !important; }
+.mt { margin-top: 12px; }
+
+/* MODEL LOADING */
+.model-loader {
+  text-align: center; padding: 40px 20px;
+}
+.model-spinner {
+  width: 48px; height: 48px; border: 4px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 1s linear infinite; margin: 0 auto 16px;
+}
+.model-text { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+.model-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="bg-glow glow1"></div>
+<div class="bg-glow glow2"></div>
+
+<div class="app">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🔐</div>
+      <div class="logo-text">SECURE<span>VOTE</span></div>
+    </div>
+    <div class="admin-tag">ADMIN · FACE REGISTRATION</div>
+  </header>
+
+  <!-- MODEL LOADING SCREEN -->
+  <div class="card" id="modelLoadCard">
+    <div class="model-loader">
+      <div class="model-spinner"></div>
+      <div class="model-text">Loading Face-API Models</div>
+      <div class="model-sub">Downloading face detection model (~6MB)...</div>
+      <div class="model-sub" id="modelProgress" style="color:var(--accent);margin-top:8px;font-family:'JetBrains Mono',monospace;font-size:11px;"></div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT (hidden until models load) -->
+  <div id="mainContent" class="hidden" style="width:100%;max-width:640px;">
+
+    <!-- PROGRESS -->
+    <div class="mini-steps" id="miniSteps">
+      <div class="ms active" id="ms1"><div class="ms-dot">1</div><div class="ms-lbl">Student Info</div></div>
+      <div class="ms-line" id="ml1"></div>
+      <div class="ms" id="ms2"><div class="ms-dot">2</div><div class="ms-lbl">Capture Face</div></div>
+      <div class="ms-line" id="ml2"></div>
+      <div class="ms" id="ms3"><div class="ms-dot">3</div><div class="ms-lbl">Copy Code</div></div>
+      <div class="ms-line" id="ml3"></div>
+      <div class="ms" id="ms4"><div class="ms-dot">4</div><div class="ms-lbl">Paste to DB</div></div>
+    </div>
+
+    <!-- STEP 1: Student Info -->
+    <div class="card" id="reg1">
+      <div class="card-title">Student Information</div>
+      <div class="card-sub">Enter the student's details — must match what's in server.js</div>
+
+      <div class="alert alert-info">ℹ️ This page generates a face descriptor. You will copy it and paste it into server.js to complete registration.</div>
+
+      <div class="field">
+        <label>College ID / Voter ID</label>
+        <input type="text" id="regVoterId" placeholder="e.g. CS2024001" maxlength="15" autocomplete="off" />
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Full Name</label>
+          <input type="text" id="regName" placeholder="Full name" />
+        </div>
+        <div class="field">
+          <label>Department</label>
+          <input type="text" id="regDept" placeholder="e.g. Computer Science" />
+        </div>
+      </div>
+
+      <div class="alert alert-danger hidden" id="reg1Error"></div>
+      <button class="btn btn-orange" onclick="proceedToCamera()">Next → Open Camera</button>
+    </div>
+
+    <!-- STEP 2: Camera & Capture -->
+    <div class="card hidden" id="reg2">
+      <div class="card-title">Capture Face</div>
+      <div class="card-sub">Student should sit 30–50cm from the camera in good light</div>
+
+      <div class="alert alert-warn">⚠️ Ensure: good lighting · face fully visible · no glasses if possible · look straight at camera</div>
+
+      <div class="camera-wrap">
+        <div class="cam-left">
+          <div class="cam-ring" id="camRing">
+            <div class="cam-circle">
+              <span class="cam-emoji" id="camEmoji">🧑</span>
+              <video id="regVideo" autoplay muted playsinline></video>
+              <div class="face-dot" id="faceDot"></div>
+            </div>
+            <div class="cam-spinner"></div>
+            <div class="cam-corner tl"></div>
+            <div class="cam-corner tr"></div>
+            <div class="cam-corner bl"></div>
+            <div class="cam-corner br"></div>
+            <div class="cam-beam"></div>
+          </div>
+        </div>
+        <div class="cam-right">
+          <div class="cam-status" id="camStatus">CAMERA OFF</div>
+          <div class="face-quality" id="faceQuality">
+            <div class="fq-row">
+              <div class="fq-label">FACE DETECTED</div>
+              <div class="fq-bar"><div class="fq-fill" id="fq1"></div></div>
+            </div>
+            <div class="fq-row">
+              <div class="fq-label">CONFIDENCE</div>
+              <div class="fq-bar"><div class="fq-fill" id="fq2"></div></div>
+            </div>
+            <div class="fq-row">
+              <div class="fq-label">ALIGNMENT</div>
+              <div class="fq-bar"><div class="fq-fill" id="fq3"></div></div>
+            </div>
+            <div class="fq-row">
+              <div class="fq-label">BRIGHTNESS</div>
+              <div class="fq-bar"><div class="fq-fill" id="fq4"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="alert alert-danger hidden" id="reg2Error"></div>
+      <button class="btn btn-orange" id="startCamBtn" onclick="startCamera()">📷 Start Camera</button>
+      <button class="btn btn-green-solid hidden" id="captureBtn" onclick="captureFace()">✅ Capture & Generate Descriptor</button>
+      <button class="btn btn-outline mt" onclick="goRegStep(1)">← Back</button>
+    </div>
+
+    <!-- STEP 3: Descriptor Output -->
+    <div class="card hidden" id="reg3">
+      <div class="card-title">Face Descriptor Generated! ✅</div>
+      <div class="card-sub">Copy the code below and paste it into your server.js file</div>
+
+      <div class="alert alert-success">✅ Face descriptor computed successfully for <strong id="descStudentName">—</strong></div>
+
+      <div class="descriptor-box show" id="descriptorBox">
+        <div class="desc-header">
+          <div class="desc-title">📋 FACE DESCRIPTOR (128 numbers)</div>
+          <button class="copy-btn" onclick="copyDescriptor()">📋 COPY</button>
+        </div>
+        <div class="desc-code" id="descriptorOutput">—</div>
+      </div>
+
+      <div class="paste-instruction show" id="pasteInstr">
+        <div class="pi-title">📝 How to paste into server.js</div>
+        <div class="pi-step">
+          <div class="pi-num">1</div>
+          <div>Open <span class="code-inline">backend/server.js</span> in any text editor (VS Code, Notepad++)</div>
+        </div>
+        <div class="pi-step">
+          <div class="pi-num">2</div>
+          <div>Find the student entry: <span class="code-inline" id="instrVoterId">—</span></div>
+        </div>
+        <div class="pi-step">
+          <div class="pi-num">3</div>
+          <div>Add this line inside their <span class="code-inline">{...}</span> object:</div>
+        </div>
+        <div style="background:rgba(0,0,0,0.4);border-radius:8px;padding:12px;margin:8px 0;font-family:'JetBrains Mono',monospace;font-size:11px;color:#fcd34d;word-break:break-all;line-height:1.7;" id="pasteCodePreview">—</div>
+        <div class="pi-step">
+          <div class="pi-num">4</div>
+          <div>Change <span class="code-inline">faceRegistered: false</span> to <span class="code-inline">faceRegistered: true</span></div>
+        </div>
+        <div class="pi-step">
+          <div class="pi-num">5</div>
+          <div>Save the file and restart the server: <span class="code-inline">node server.js</span></div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:16px;">
+        <button class="btn btn-orange" onclick="registerAnother()" style="flex:1;">+ Register Another Student</button>
+        <button class="btn btn-outline" onclick="goRegStep(2)" style="flex:1;margin:0;">← Retake</button>
+      </div>
+    </div>
+
+    <!-- REGISTERED LIST -->
+    <div class="card" id="regListCard">
+      <div class="card-title" style="margin-bottom:16px;">Registered This Session</div>
+      <div id="regList">
+        <div style="text-align:center;padding:20px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:1px;">
+          NO STUDENTS REGISTERED YET
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end mainContent -->
+</div>
+
+<script>
+// ============================================================
+// FACE-API.JS MODEL LOADING
+// Models hosted on jsDelivr CDN
+// ============================================================
+const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model';
+
+let modelsLoaded = false;
+let mediaStream = null;
+let detectionInterval = null;
+let currentDescriptor = null;
+let registeredStudents = [];
+
+let regState = {
+  step: 1,
+  voterId: '',
+  name: '',
+  dept: ''
+};
+
+async function loadModels() {
+  const progress = document.getElementById('modelProgress');
+  try {
+    progress.textContent = 'Loading SSD MobileNet...';
+    await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+
+    progress.textContent = 'Loading Face Landmark detector...';
+    await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+
+    progress.textContent = 'Loading Face Recognition model...';
+    await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+
+    modelsLoaded = true;
+    document.getElementById('modelLoadCard').classList.add('hidden');
+    document.getElementById('mainContent').classList.remove('hidden');
+
+  } catch(err) {
+    document.getElementById('modelProgress').textContent = '❌ Failed to load models. Check internet connection.';
+    console.error('Model load error:', err);
+
+    // Fallback: still show UI but with warning
+    setTimeout(() => {
+      document.getElementById('modelLoadCard').classList.add('hidden');
+      document.getElementById('mainContent').classList.remove('hidden');
+    }, 2000);
+  }
+}
+
+loadModels();
+
+// ============================================================
+// PROGRESS STEPS
+// ============================================================
+function goRegStep(n) {
+  for (let i = 1; i <= 4; i++) {
+    const ms = document.getElementById('ms' + i);
+    if (!ms) continue;
+    const dot = ms.querySelector('.ms-dot');
+    if (i < n) {
+      ms.classList.remove('active'); ms.classList.add('done');
+      dot.textContent = '✓';
+      if (i <= 3) document.getElementById('ml' + i).classList.add('done');
+    } else if (i === n) {
+      ms.classList.add('active'); ms.classList.remove('done');
+      dot.textContent = i;
+    } else {
+      ms.classList.remove('active', 'done');
+      dot.textContent = i;
+      if (i <= 3) document.getElementById('ml' + i).classList.remove('done');
+    }
+  }
+  regState.step = n;
+
+  // Show/hide cards
+  ['reg1','reg2','reg3'].forEach((id, idx) => {
+    document.getElementById(id).classList.toggle('hidden', idx + 1 !== n);
+  });
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ============================================================
+// STEP 1 → 2
+// ============================================================
+function proceedToCamera() {
+  const vid = document.getElementById('regVoterId').value.trim().toUpperCase();
+  const name = document.getElementById('regName').value.trim();
+  const dept = document.getElementById('regDept').value.trim();
+  const err = document.getElementById('reg1Error');
+
+  if (!vid || !name || !dept) {
+    err.textContent = '❌ Please fill in all fields';
+    err.classList.remove('hidden');
+    return;
+  }
+
+  err.classList.add('hidden');
+  regState.voterId = vid;
+  regState.name = name;
+  regState.dept = dept;
+  goRegStep(2);
+}
+
+// ============================================================
+// CAMERA
+// ============================================================
+async function startCamera() {
+  const btn = document.getElementById('startCamBtn');
+  const err = document.getElementById('reg2Error');
+  const video = document.getElementById('regVideo');
+  const emoji = document.getElementById('camEmoji');
+  const status = document.getElementById('camStatus');
+
+  btn.innerHTML = '<span class="spinner"></span> Starting...';
+  btn.disabled = true;
+  err.classList.add('hidden');
+
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' }, audio: false });
+    video.srcObject = mediaStream;
+    video.style.display = 'block';
+    emoji.style.opacity = '0';
+    await new Promise(r => video.onloadedmetadata = r);
+
+    btn.classList.add('hidden');
+    status.textContent = 'SCANNING FOR FACE...';
+    status.className = 'cam-status scanning';
+    document.getElementById('camRing').classList.add('scanning');
+
+    // Start live detection loop
+    startDetectionLoop(video);
+
+  } catch(e) {
+    err.textContent = '❌ Camera access denied. Please allow camera permissions.';
+    err.classList.remove('hidden');
+    btn.innerHTML = '📷 Start Camera';
+    btn.disabled = false;
+  }
+}
+
+function startDetectionLoop(video) {
+  detectionInterval = setInterval(async () => {
+    if (!modelsLoaded) return;
+    try {
+      const detection = await faceapi
+        .detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      if (detection) {
+        const score = detection.detection.score;
+        const aligned = checkAlignment(detection.landmarks);
+
+        // Update quality bars
+        setBar('fq1', 100, '#22c55e');
+        setBar('fq2', Math.round(score * 100), score > 0.8 ? '#22c55e' : '#f59e0b');
+        setBar('fq3', aligned, aligned > 70 ? '#22c55e' : '#f59e0b');
+        setBar('fq4', estimateBrightness(video), null);
+
+        document.getElementById('faceDot').style.display = 'block';
+        document.getElementById('camStatus').textContent = `FACE DETECTED — ${Math.round(score * 100)}% CONFIDENCE`;
+        document.getElementById('camStatus').className = 'cam-status success';
+
+        // Show capture button when quality is good
+        if (score > 0.7) {
+          document.getElementById('captureBtn').classList.remove('hidden');
+          // Store latest descriptor
+          currentDescriptor = Array.from(detection.descriptor);
+        }
+      } else {
+        setBar('fq1', 0, '#ef4444');
+        setBar('fq2', 0, '#ef4444');
+        setBar('fq3', 0, '#ef4444');
+        document.getElementById('faceDot').style.display = 'none';
+        document.getElementById('camStatus').textContent = 'NO FACE DETECTED — MOVE CLOSER';
+        document.getElementById('camStatus').className = 'cam-status fail';
+        document.getElementById('captureBtn').classList.add('hidden');
+        currentDescriptor = null;
+      }
+    } catch(e) {}
+  }, 300);
+}
+
+function setBar(id, pct, color) {
+  const el = document.getElementById(id);
+  el.style.width = pct + '%';
+  if (color) el.style.background = color;
+  else {
+    // brightness: green if > 40, yellow if > 20, red otherwise
+    el.style.background = pct > 40 ? '#22c55e' : pct > 20 ? '#f59e0b' : '#ef4444';
+  }
+}
+
+function checkAlignment(landmarks) {
+  // Simple: check if eyes are roughly horizontal
+  const leftEye = landmarks.getLeftEye();
+  const rightEye = landmarks.getRightEye();
+  if (!leftEye.length || !rightEye.length) return 50;
+  const lc = leftEye.reduce((a,b) => ({x: a.x+b.x, y: a.y+b.y}), {x:0,y:0});
+  const rc = rightEye.reduce((a,b) => ({x: a.x+b.x, y: a.y+b.y}), {x:0,y:0});
+  const dy = Math.abs(lc.y/leftEye.length - rc.y/rightEye.length);
+  const dx = Math.abs(lc.x/leftEye.length - rc.x/rightEye.length);
+  return Math.max(0, Math.min(100, 100 - (dy / dx) * 200));
+}
+
+function estimateBrightness(video) {
+  try {
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 48;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(video, 0, 0, 64, 48);
+    const d = ctx.getImageData(0, 0, 64, 48).data;
+    let sum = 0;
+    for (let i = 0; i < d.length; i += 4) sum += (d[i] + d[i+1] + d[i+2]) / 3;
+    return Math.min(100, Math.round((sum / (d.length/4)) / 2.55));
+  } catch(e) { return 50; }
+}
+
+function stopCamera() {
+  if (detectionInterval) { clearInterval(detectionInterval); detectionInterval = null; }
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  document.getElementById('regVideo').style.display = 'none';
+  document.getElementById('camRing').classList.remove('scanning');
+}
+
+// ============================================================
+// CAPTURE FACE → GENERATE DESCRIPTOR
+// ============================================================
+async function captureFace() {
+  if (!currentDescriptor) {
+    document.getElementById('reg2Error').textContent = '❌ No face detected. Please position your face in the circle.';
+    document.getElementById('reg2Error').classList.remove('hidden');
+    return;
+  }
+
+  const btn = document.getElementById('captureBtn');
+  btn.innerHTML = '<span class="spinner"></span> Computing descriptor...';
+  btn.disabled = true;
+
+  // Take one more fresh reading
+  const video = document.getElementById('regVideo');
+  try {
+    const detection = await faceapi
+      .detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+
+    if (!detection) throw new Error('Face not found');
+
+    currentDescriptor = Array.from(detection.descriptor);
+  } catch(e) {}
+
+  stopCamera();
+
+  // Format descriptor
+  const descriptorStr = JSON.stringify(currentDescriptor);
+  const pasteCode = `faceDescriptor: ${descriptorStr},`;
+
+  document.getElementById('descriptorOutput').textContent = descriptorStr;
+  document.getElementById('descStudentName').textContent = `${regState.name} (${regState.voterId})`;
+  document.getElementById('instrVoterId').textContent = `"${regState.voterId}"`;
+  document.getElementById('pasteCodePreview').textContent = pasteCode;
+
+  // Add to session list
+  registeredStudents.push({ voterId: regState.voterId, name: regState.name, dept: regState.dept });
+  updateRegisteredList();
+
+  goRegStep(3);
+}
+
+// ============================================================
+// COPY DESCRIPTOR
+// ============================================================
+function copyDescriptor() {
+  const vid = regState.voterId;
+  const name = regState.name;
+  const text = document.getElementById('descriptorOutput').textContent;
+  const fullCode = `// ${name} (${vid})\nfaceDescriptor: ${text},`;
+
+  navigator.clipboard.writeText(fullCode).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = '✅ COPIED!';
+    btn.style.background = 'rgba(34,197,94,0.25)';
+    btn.style.borderColor = 'rgba(34,197,94,0.5)';
+    btn.style.color = '#22c55e';
+    setTimeout(() => {
+      btn.textContent = '📋 COPY';
+      btn.style = '';
+    }, 2000);
+  });
+}
+
+// ============================================================
+// REGISTERED LIST
+// ============================================================
+function updateRegisteredList() {
+  const list = document.getElementById('regList');
+  if (!registeredStudents.length) return;
+  list.innerHTML = registeredStudents.map(s => `
+    <div class="reg-item">
+      <div class="reg-avatar">✅</div>
+      <div class="reg-info">
+        <div class="reg-name">${s.name}</div>
+        <div class="reg-id">${s.voterId} · ${s.dept}</div>
+      </div>
+      <div class="reg-status">FACE SAVED</div>
+    </div>
+  `).join('');
+}
+
+function registerAnother() {
+  currentDescriptor = null;
+  document.getElementById('regVoterId').value = '';
+  document.getElementById('regName').value = '';
+  document.getElementById('regDept').value = '';
+  document.getElementById('startCamBtn').classList.remove('hidden');
+  document.getElementById('startCamBtn').disabled = false;
+  document.getElementById('startCamBtn').innerHTML = '📷 Start Camera';
+  document.getElementById('captureBtn').classList.add('hidden');
+  document.getElementById('captureBtn').disabled = false;
+  document.getElementById('captureBtn').innerHTML = '✅ Capture & Generate Descriptor';
+  document.getElementById('camStatus').textContent = 'CAMERA OFF';
+  document.getElementById('camStatus').className = 'cam-status';
+  document.getElementById('camEmoji').style.opacity = '0.2';
+  document.getElementById('faceDot').style.display = 'none';
+  ['fq1','fq2','fq3','fq4'].forEach(id => setBar(id, 0, '#3d5070'));
+  goRegStep(1);
+}
+</script>
+</body>
+</html>
