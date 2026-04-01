@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: securevote-backend
+    env: node
+    region: singapore          # closest to India
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FAST2SMS_KEY
+        sync: false            # you set this manually in Render dashboard
+      - key: ADMIN_PASSWORD
+        sync: false            # you set this manually in Render dashboard
+      - key: FRONTEND_URL
+        sync: false            # paste your frontend Render URL here after deploy
