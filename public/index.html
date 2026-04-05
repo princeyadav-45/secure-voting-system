@@ -1,377 +1,774 @@
-// ============================================================
-// SECUREVOTE BACKEND — Node.js + Express
-// Render deployment ready + duplicate face blocking
-// ============================================================
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SecureVote — Digital Voting System</title>
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Noto+Serif:wght@400;600;700&display=swap');
 
-const express = require('express');
-const cors    = require('cors');
-const crypto  = require('crypto');
-const path    = require('path');
-const https   = require('https');
+:root {
+  --saffron: #FF9933;
+  --white: #FFFFFF;
+  --green: #138808;
+  --navy: #000080;
+  --bg: #f5f5f0;
+  --card: #ffffff;
+  --border: #d4d0c8;
+  --text: #1a1a1a;
+  --muted: #666666;
+  --light: #f0ede4;
+  --success: #138808;
+  --danger: #cc0000;
+  --accent: #000080;
+}
 
-const app = express();
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
-// ============================================================
-// 🌍 CORS — allow your frontend URL
-// On Render: set environment variable FRONTEND_URL to your
-// frontend Render URL e.g. https://securevote.onrender.com
-// ============================================================
-const ALLOWED_ORIGINS = [
-  'http://localhost:3000',
-  'http://localhost:5500',
-  'http://127.0.0.1:5500',
-  process.env.FRONTEND_URL        // set this on Render dashboard
-].filter(Boolean);
+body {
+  font-family: 'Noto Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
 
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
-    cb(new Error('CORS blocked: ' + origin));
-  },
-  credentials: true
-}));
+/* TOP STRIP */
+.top-strip {
+  background: var(--saffron);
+  height: 6px;
+}
+.mid-strip {
+  background: var(--white);
+  height: 6px;
+  border-bottom: 1px solid #eee;
+}
+.bot-strip {
+  background: var(--green);
+  height: 6px;
+}
 
-app.use(express.json({ limit: '10mb' }));
+/* HEADER */
+.gov-header {
+  background: var(--white);
+  border-bottom: 2px solid var(--border);
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.emblem {
+  width: 64px; height: 64px;
+  background: linear-gradient(135deg, var(--saffron), var(--green));
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px;
+  border: 3px solid var(--navy);
+  flex-shrink: 0;
+}
+.header-text { flex: 1; }
+.header-main {
+  font-family: 'Noto Serif', serif;
+  font-size: 20px; font-weight: 700;
+  color: var(--navy);
+  line-height: 1.2;
+}
+.header-sub {
+  font-size: 12px; color: var(--muted);
+  margin-top: 2px; letter-spacing: 0.5px;
+}
+.header-right {
+  text-align: right; font-size: 11px; color: var(--muted);
+  font-family: 'Noto Sans', sans-serif;
+  line-height: 1.6;
+}
+.secure-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: #e8f5e9; border: 1px solid var(--green);
+  color: var(--green); padding: 3px 10px;
+  border-radius: 4px; font-size: 11px; font-weight: 600;
+  letter-spacing: 0.5px;
+}
 
-// Serve frontend from /public (for single-service Render deploy)
-// Put your index.html + admin-register.html inside /public folder
-app.use(express.static(path.join(__dirname, 'public')));
+/* MAIN */
+.main { max-width: 680px; margin: 0 auto; padding: 28px 16px 60px; }
 
-// ============================================================
-// 📦 VOTER DATABASE
-// After running admin-register.html for each student:
-//   1. Copy the faceDescriptor array shown on screen
-//   2. Paste it below as faceDescriptor: [ ...numbers... ]
-//   3. Set faceRegistered: true
-// ============================================================
+/* PROGRESS */
+.progress-nav {
+  display: flex; align-items: center;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.pn-step { display: flex; flex-direction: column; align-items: center; gap: 5px; flex: 1; }
+.pn-dot {
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 2px solid var(--border); background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: var(--muted);
+  transition: all 0.3s;
+}
+.pn-step.active .pn-dot { border-color: var(--navy); background: var(--navy); color: white; }
+.pn-step.done .pn-dot { border-color: var(--green); background: var(--green); color: white; }
+.pn-label { font-size: 10px; color: var(--muted); font-weight: 500; text-align: center; }
+.pn-step.active .pn-label { color: var(--navy); font-weight: 700; }
+.pn-step.done .pn-label { color: var(--green); }
+.pn-line { flex: 1; height: 2px; background: var(--border); margin-bottom: 18px; transition: background 0.3s; }
+.pn-line.done { background: var(--green); }
 
-const VOTER_DATABASE = {
+/* CARD */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  margin-bottom: 16px;
+  animation: fadeUp 0.3s ease;
+}
+@keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
 
-  "CS2024001": {
-    name: "Rahul Sharma",
-    dob: "15/08/2002",
-    mobile: "9876543210",
-    department: "Computer Science",
-    year: "2nd Year",
-    faceRegistered: false,    // ← change to true after pasting descriptor
-    faceDescriptor: null,     // ← paste [0.12, -0.45, 0.87, ...] here
-    hasVoted: false
-  },
+.card-header {
+  background: var(--navy);
+  color: white; padding: 14px 20px;
+  display: flex; align-items: center; gap: 10px;
+}
+.card-header-icon { font-size: 20px; }
+.card-header-title { font-family: 'Noto Serif', serif; font-size: 16px; font-weight: 700; }
+.card-header-sub { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+.card-body { padding: 24px; }
 
-  "CS2024002": {
-    name: "Priya Mehta",
-    dob: "22/03/2003",
-    mobile: "9123456780",
-    department: "Computer Science",
-    year: "2nd Year",
-    faceRegistered: false,
-    faceDescriptor: null,
-    hasVoted: false
-  },
+/* FORM */
+.field { margin-bottom: 18px; }
+.field label {
+  display: block; font-size: 12px; font-weight: 700;
+  color: var(--navy); margin-bottom: 7px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.field input {
+  width: 100%;
+  background: var(--bg); border: 1.5px solid var(--border);
+  border-radius: 4px; color: var(--text); padding: 11px 14px;
+  font-size: 15px; outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: 'Noto Sans', sans-serif;
+}
+.field input:focus { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(0,0,128,0.1); }
+.field input::placeholder { color: #aaa; }
 
-  "CS2024003": {
-    name: "Ankit Verma",
-    dob: "10/11/2002",
-    mobile: "9988776655",
-    department: "Computer Science",
-    year: "2nd Year",
-    faceRegistered: false,
-    faceDescriptor: null,
-    hasVoted: false
-  },
+/* ALERT */
+.alert {
+  padding: 12px 14px; border-radius: 4px; font-size: 13px;
+  margin-bottom: 16px; display: flex; gap: 10px; align-items: flex-start;
+  line-height: 1.5; border-left: 4px solid;
+}
+.alert-info { background: #e8eaf6; border-color: var(--navy); color: var(--navy); }
+.alert-success { background: #e8f5e9; border-color: var(--green); color: #1b5e20; }
+.alert-danger { background: #ffebee; border-color: var(--danger); color: var(--danger); }
+.alert-warning { background: #fff8e1; border-color: var(--saffron); color: #e65100; }
 
-  "123456": {
-    name: "Prince Yadav",
-    dob: "24/09/2003",
-    mobile: "9373188751",
-    department: "ECE",
-    year: "3rd Year",
-    faceRegistered: false,    // ← set true after pasting YOUR descriptor
-    faceDescriptor: null,     // ← paste your descriptor here
-    hasVoted: false
-  }
+/* BUTTON */
+.btn {
+  width: 100%; padding: 13px; border: none; border-radius: 4px;
+  font-family: 'Noto Sans', sans-serif; font-size: 15px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s; letter-spacing: 0.5px;
+}
+.btn-primary { background: var(--navy); color: white; }
+.btn-primary:hover { background: #000066; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-outline {
+  background: transparent; border: 2px solid var(--border);
+  color: var(--muted); margin-top: 10px;
+}
+.btn-outline:hover { border-color: var(--navy); color: var(--navy); }
+.btn-green { background: var(--green); color: white; }
+.btn-green:hover { background: #0d6b06; }
+.btn-green:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* VOTER BADGE */
+.voter-badge {
+  display: flex; align-items: center; gap: 14px;
+  background: #e8eaf6; border: 1px solid #c5cae9;
+  border-radius: 6px; padding: 14px 16px; margin-bottom: 20px;
+}
+.voter-avatar {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: var(--navy); display: flex; align-items: center;
+  justify-content: center; font-size: 22px; flex-shrink: 0;
+  border: 2px solid white;
+}
+.voter-name { font-weight: 700; font-size: 15px; color: var(--navy); }
+.voter-id { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.verified-tag {
+  margin-left: auto;
+  background: #e8f5e9; border: 1px solid var(--green);
+  color: var(--green); padding: 4px 10px; border-radius: 4px;
+  font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+
+/* OTP */
+.otp-grid { display: flex; gap: 10px; justify-content: center; margin: 20px 0 12px; }
+.otp-cell {
+  width: 52px; height: 60px;
+  background: var(--bg); border: 2px solid var(--border);
+  border-radius: 4px; text-align: center;
+  font-size: 24px; font-weight: 700; color: var(--navy);
+  outline: none; transition: border-color 0.2s;
+  -moz-appearance: textfield;
+}
+.otp-cell::-webkit-outer-spin-button,
+.otp-cell::-webkit-inner-spin-button { -webkit-appearance: none; }
+.otp-cell:focus { border-color: var(--navy); background: white; }
+.otp-cell.filled { border-color: var(--navy); background: #e8eaf6; }
+.otp-hint { text-align: center; font-size: 12px; color: var(--muted); }
+.otp-hint span { color: var(--navy); cursor: pointer; font-weight: 600; }
+.otp-timer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.otp-timer .time { color: var(--danger); font-weight: 700; }
+
+/* FACE SCANNER */
+.scanner-wrap { display: flex; flex-direction: column; align-items: center; margin: 12px 0 20px; }
+.scanner-outer {
+  position: relative; width: 200px; height: 200px; margin-bottom: 14px;
+}
+.scanner-circle {
+  width: 100%; height: 100%; border-radius: 50%;
+  background: var(--bg); border: 3px solid var(--border);
+  overflow: hidden; display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+.scanner-emoji { font-size: 70px; opacity: 0.2; transition: opacity 0.3s; }
+video#faceVideo {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; border-radius: 50%; display: none;
+  transform: scaleX(-1);
+}
+.scan-ring {
+  position: absolute; inset: -6px; border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: var(--navy); border-right-color: var(--navy);
+  opacity: 0; transition: opacity 0.3s;
+}
+.scanning .scan-ring { opacity: 1; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.scan-beam {
+  position: absolute; left: 8%; right: 8%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--navy), transparent);
+  opacity: 0; top: 20%;
+}
+.scanning .scan-beam { opacity: 1; animation: beam 1.6s ease-in-out infinite; }
+@keyframes beam { 0%{top:15%} 50%{top:82%} 100%{top:15%} }
+.scan-status {
+  font-size: 12px; font-weight: 700; letter-spacing: 1.5px;
+  text-transform: uppercase; color: var(--muted); text-align: center;
+  transition: color 0.3s;
+}
+.scan-status.scanning { color: var(--navy); }
+.scan-status.success { color: var(--green); }
+.scan-status.fail { color: var(--danger); }
+.scan-timer { font-size: 12px; color: var(--muted); margin-top: 8px; text-align: center; display: none; }
+
+/* CANDIDATES */
+.candidates { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0; }
+.candidate {
+  background: var(--bg); border: 2px solid var(--border);
+  border-radius: 6px; padding: 18px 14px; cursor: pointer;
+  text-align: center; transition: all 0.2s; position: relative;
+}
+.candidate:hover { border-color: var(--navy); background: #e8eaf6; }
+.candidate.selected {
+  border-color: var(--navy); background: #e8eaf6;
+  box-shadow: 0 0 0 3px rgba(0,0,128,0.15);
+}
+.candidate.selected::after {
+  content: '✓';
+  position: absolute; top: 8px; right: 10px;
+  color: var(--green); font-size: 16px; font-weight: 700;
+}
+.cand-symbol { font-size: 36px; margin-bottom: 8px; }
+.cand-name { font-weight: 700; font-size: 14px; color: var(--navy); margin-bottom: 4px; }
+.cand-slogan { font-size: 11px; color: var(--muted); font-style: italic; }
+.vote-confirm-box {
+  background: #fff8e1; border: 1px solid var(--saffron); border-left: 4px solid var(--saffron);
+  border-radius: 4px; padding: 14px 16px; margin-bottom: 16px; display: none;
+  font-size: 14px; color: #e65100;
+}
+.vote-confirm-box.show { display: block; }
+.vote-confirm-box strong { color: var(--navy); }
+
+/* SUCCESS */
+.success-wrap { text-align: center; padding: 16px 0; }
+.success-icon {
+  width: 80px; height: 80px; margin: 0 auto 20px;
+  background: #e8f5e9; border: 3px solid var(--green);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 36px; animation: popIn 0.5s cubic-bezier(0.175,0.885,0.32,1.275);
+}
+@keyframes popIn { from{transform:scale(0);opacity:0} to{transform:scale(1);opacity:1} }
+.success-title { font-family: 'Noto Serif', serif; font-size: 24px; font-weight: 700; color: var(--green); margin-bottom: 6px; }
+.success-sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+.receipt {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 16px; text-align: left; margin-bottom: 20px;
+}
+.receipt-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 0; border-bottom: 1px solid var(--border);
+}
+.receipt-row:last-child { border-bottom: none; }
+.rk { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.rv { font-size: 13px; color: var(--text); font-weight: 600; }
+.rv.hash { font-size: 10px; color: var(--navy); word-break: break-all; font-family: monospace; }
+.receipt-header {
+  background: var(--navy); color: white; margin: -16px -16px 14px;
+  padding: 12px 16px; text-align: center;
+  font-family: 'Noto Serif', serif; font-weight: 700; font-size: 14px;
+}
+.tricolor-strip { display: flex; height: 4px; margin: 16px 0; border-radius: 2px; overflow: hidden; }
+.tricolor-strip div { flex: 1; }
+.tc1 { background: var(--saffron); }
+.tc2 { background: white; border: 1px solid #eee; }
+.tc3 { background: var(--green); }
+
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.4); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; margin-right: 7px; vertical-align: middle; }
+.hidden { display: none !important; }
+
+/* FOOTER */
+.gov-footer {
+  background: var(--navy); color: rgba(255,255,255,0.7);
+  text-align: center; padding: 16px; font-size: 11px;
+  margin-top: 40px; letter-spacing: 0.5px;
+}
+</style>
+</head>
+<body>
+
+<!-- TRICOLOR TOP -->
+<div class="top-strip"></div>
+<div class="mid-strip"></div>
+<div class="bot-strip"></div>
+
+<!-- HEADER -->
+<div class="gov-header">
+  <div class="emblem">🗳️</div>
+  <div class="header-text">
+    <div class="header-main">SecureVote — Digital Election System</div>
+    <div class="header-sub">Biometric Authenticated • OTP Verified • Tamper Proof</div>
+  </div>
+  <div class="header-right">
+    <div class="secure-badge">🔒 SECURE</div><br>
+    <span id="currentTime"></span>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- PROGRESS -->
+  <div class="progress-nav" id="progressNav">
+    <div class="pn-step active" id="pb1"><div class="pn-dot">1</div><div class="pn-label">Voter ID</div></div>
+    <div class="pn-line" id="pl1"></div>
+    <div class="pn-step" id="pb2"><div class="pn-dot">2</div><div class="pn-label">OTP</div></div>
+    <div class="pn-line" id="pl2"></div>
+    <div class="pn-step" id="pb3"><div class="pn-dot">3</div><div class="pn-label">Face</div></div>
+    <div class="pn-line" id="pl3"></div>
+    <div class="pn-step" id="pb4"><div class="pn-dot">4</div><div class="pn-label">Vote</div></div>
+    <div class="pn-line" id="pl4"></div>
+    <div class="pn-step" id="pb5"><div class="pn-dot">5</div><div class="pn-label">Done</div></div>
+  </div>
+
+  <!-- STEP 1 -->
+  <div class="card" id="step1">
+    <div class="card-header">
+      <div class="card-header-icon">🪪</div>
+      <div><div class="card-header-title">Voter Identity Verification</div><div class="card-header-sub">Enter your registered Voter ID to begin</div></div>
+    </div>
+    <div class="card-body">
+      <div class="alert alert-info">ℹ️ Your Voter ID is your college enrollment number. It must be registered in the system by the admin before voting.</div>
+      <div class="alert alert-danger hidden" id="voterError"></div>
+      <div class="field">
+        <label>Voter ID / College Enrollment Number</label>
+        <input type="text" id="voterId" placeholder="e.g. CS2024001" maxlength="20" autocomplete="off" />
+      </div>
+      <button class="btn btn-primary" onclick="submitVoterId()">Verify Identity →</button>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="card hidden" id="step2">
+    <div class="card-header">
+      <div class="card-header-icon">📱</div>
+      <div><div class="card-header-title">OTP Verification</div><div class="card-header-sub">Enter the 6-digit code sent to your mobile</div></div>
+    </div>
+    <div class="card-body">
+      <div class="voter-badge">
+        <div class="voter-avatar">👤</div>
+        <div>
+          <div class="voter-name" id="badgeName">—</div>
+          <div class="voter-id" id="badgeId">—</div>
+        </div>
+        <div class="verified-tag">✓ ID VERIFIED</div>
+      </div>
+      <div class="alert alert-success" id="otpSentAlert"></div>
+      <div class="otp-grid">
+        <input type="number" class="otp-cell" id="o1" min="0" max="9" oninput="oMove(this,'o2')" onkeydown="oBk(this,event,null)">
+        <input type="number" class="otp-cell" id="o2" min="0" max="9" oninput="oMove(this,'o3')" onkeydown="oBk(this,event,'o1')">
+        <input type="number" class="otp-cell" id="o3" min="0" max="9" oninput="oMove(this,'o4')" onkeydown="oBk(this,event,'o2')">
+        <input type="number" class="otp-cell" id="o4" min="0" max="9" oninput="oMove(this,'o5')" onkeydown="oBk(this,event,'o3')">
+        <input type="number" class="otp-cell" id="o5" min="0" max="9" oninput="oMove(this,'o6')" onkeydown="oBk(this,event,'o4')">
+        <input type="number" class="otp-cell" id="o6" min="0" max="9" oninput="oMove(this,null)" onkeydown="oBk(this,event,'o5')">
+      </div>
+      <div class="otp-timer">Time remaining: <span class="time" id="timerVal">05:00</span></div>
+      <div class="otp-hint" style="margin-top:8px">Didn't receive? <span onclick="resendOTP()">Resend OTP</span></div>
+      <div class="alert alert-danger hidden" id="otpError" style="margin-top:14px"></div>
+      <div id="devOtpBox" class="hidden" style="margin-top:14px;padding:12px;background:#f5f5f0;border:1px solid #ddd;border-radius:4px;">
+        <div style="font-size:11px;color:#666;margin-bottom:4px;">🛠 DEV MODE — OTP:</div>
+        <div id="devOtpVal" style="font-size:24px;color:var(--navy);letter-spacing:8px;font-weight:700;"></div>
+      </div>
+      <div style="margin-top:16px">
+        <button class="btn btn-primary" onclick="submitOTP()">Verify OTP →</button>
+        <button class="btn btn-outline" onclick="goTo(1)">← Back</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="card hidden" id="step3">
+    <div class="card-header">
+      <div class="card-header-icon">📷</div>
+      <div><div class="card-header-title">Biometric Face Authentication</div><div class="card-header-sub">Look into the camera and hold still</div></div>
+    </div>
+    <div class="card-body">
+      <div class="voter-badge">
+        <div class="voter-avatar">👤</div>
+        <div>
+          <div class="voter-name" id="fBadgeName">—</div>
+          <div class="voter-id" id="fBadgeId">—</div>
+        </div>
+        <div class="verified-tag" style="background:#fff8e1;border-color:var(--saffron);color:#e65100;">✓ OTP OK</div>
+      </div>
+      <div class="alert alert-warning">⚠️ Ensure good lighting. Your face must be clearly visible and match your registered photo.</div>
+      <div class="scanner-wrap">
+        <div class="scanner-outer" id="scanRing">
+          <div class="scanner-circle">
+            <span class="scanner-emoji" id="scanEmoji">🧑</span>
+            <video id="faceVideo" autoplay muted playsinline></video>
+          </div>
+          <div class="scan-ring"></div>
+          <div class="scan-beam"></div>
+        </div>
+        <div class="scan-status" id="scanStatus">READY TO SCAN</div>
+        <div class="scan-timer" id="scanTimer">Recording: <span id="scanCountdown">30</span>s remaining</div>
+      </div>
+      <div class="alert alert-danger hidden" id="faceError"></div>
+      <button class="btn btn-primary" id="startScanBtn" onclick="startFaceScan()">Start Face Scan 📷</button>
+      <button class="btn btn-outline" onclick="goTo(2)">← Back</button>
+    </div>
+  </div>
+
+  <!-- STEP 4 -->
+  <div class="card hidden" id="step4">
+    <div class="card-header">
+      <div class="card-header-icon">🗳️</div>
+      <div><div class="card-header-title">Cast Your Vote</div><div class="card-header-sub">Select your preferred candidate carefully</div></div>
+    </div>
+    <div class="card-body">
+      <div class="alert alert-success">✅ Identity verified via OTP + Face biometrics. Your vote is secure.</div>
+      <div class="alert alert-warning">⚠️ Your vote is final and cannot be changed once submitted.</div>
+      <div class="candidates" id="candidatesGrid"></div>
+      <div class="vote-confirm-box" id="voteConfirm">
+        You have selected: <strong id="selectedName">—</strong><br>
+        <small>Please confirm before submitting.</small>
+      </div>
+      <div class="alert alert-danger hidden" id="voteError"></div>
+      <button class="btn btn-green" id="castVoteBtn" onclick="castVote()" disabled>✅ Submit Vote</button>
+    </div>
+  </div>
+
+  <!-- STEP 5 -->
+  <div class="card hidden" id="step5">
+    <div class="card-body">
+      <div class="success-wrap">
+        <div class="success-icon">✅</div>
+        <div class="success-title">Vote Cast Successfully!</div>
+        <div class="success-sub">Your vote has been securely recorded in the system.</div>
+        <div class="tricolor-strip"><div class="tc1"></div><div class="tc2"></div><div class="tc3"></div></div>
+        <div class="receipt">
+          <div class="receipt-header">🗳️ OFFICIAL VOTING RECEIPT</div>
+          <div class="receipt-row"><div class="rk">Voter ID</div><div class="rv" id="r-id">—</div></div>
+          <div class="receipt-row"><div class="rk">Voter Name</div><div class="rv" id="r-name">—</div></div>
+          <div class="receipt-row"><div class="rk">Voted For</div><div class="rv" id="r-cand">—</div></div>
+          <div class="receipt-row"><div class="rk">Date & Time</div><div class="rv" id="r-time">—</div></div>
+          <div class="receipt-row"><div class="rk">Auth Method</div><div class="rv">OTP + Face Biometrics ✓</div></div>
+          <div class="receipt-row"><div class="rk">Block Hash</div><div class="rv hash" id="r-hash">—</div></div>
+        </div>
+        <div class="tricolor-strip"><div class="tc1"></div><div class="tc2"></div><div class="tc3"></div></div>
+        <div style="font-size:12px;color:var(--muted);margin-top:8px;">You may close this window. Thank you for participating in the democratic process.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="gov-footer">
+  SecureVote Digital Election System · End-to-End Encrypted · Powered by Biometric AI
+</div>
+
+<script>
+const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:3000/api' : '/api';
+const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model';
+let faceModelsLoaded = false;
+
+async function loadFaceModels() {
+  try {
+    await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+    faceModelsLoaded = true;
+    console.log('✅ Face models loaded');
+  } catch(e) { console.warn('Face models failed:', e); }
+}
+loadFaceModels();
+
+// Clock
+function updateClock() {
+  document.getElementById('currentTime').textContent = new Date().toLocaleString('en-IN');
+}
+updateClock(); setInterval(updateClock, 1000);
+
+let state = {
+  step: 1, voterId: '', voterName: '', sessionId: '',
+  selectedNomineeId: null, otpInterval: null, otpSeconds: 300, scanCountdown: null
 };
 
-// ============================================================
-// 🏆 NOMINEES DATABASE
-// ============================================================
-const NOMINEES = [
-  { id: 1, name: "Rahul Sharma",  position: "Class Representative", slogan: "Progress with Unity",    symbol: "🌟", votes: 0 },
-  { id: 2, name: "Priya Mehta",   position: "Class Representative", slogan: "Your Voice, My Mission", symbol: "🔥", votes: 0 },
-  { id: 3, name: "Ankit Verma",   position: "Class Representative", slogan: "Innovation First",       symbol: "⚡", votes: 0 },
-];
-
-// In-memory stores
-const OTP_STORE     = {};   // { voterId: { otp, expiry } }
-const FACE_SESSIONS = {};   // { sessionId: { voterId, faceVerified, expiry } }
-const VOTE_LOG      = [];   // all votes (admin only)
-
-// ============================================================
-// 🔒 DUPLICATE FACE DETECTION
-// Problem: Same person registers with multiple Voter IDs
-// Fix: When someone scans their face, we compute the euclidean
-// distance between their descriptor and EVERY other registered
-// descriptor. If distance < 0.5 → same person → BLOCK.
-// ============================================================
-
-// Euclidean distance between two 128-number face descriptors
-function euclideanDistance(d1, d2) {
-  if (!d1 || !d2 || d1.length !== d2.length) return Infinity;
-  let sum = 0;
-  for (let i = 0; i < d1.length; i++) {
-    sum += (d1[i] - d2[i]) ** 2;
-  }
-  return Math.sqrt(sum);
-}
-
-// Returns { isDuplicate, matchedVoterId } after comparing with all OTHER voters
-function checkDuplicateFace(incomingDescriptor, currentVoterId) {
-  for (const [voterId, voter] of Object.entries(VOTER_DATABASE)) {
-    if (voterId === currentVoterId) continue;           // skip self
-    if (!voter.faceRegistered || !voter.faceDescriptor) continue;
-
-    const dist = euclideanDistance(incomingDescriptor, voter.faceDescriptor);
-
-    if (dist < 0.5) {
-      // Same face found under a different Voter ID
-      console.log(`🚨 DUPLICATE FACE: ${currentVoterId} face matches ${voterId} (dist=${dist.toFixed(3)})`);
-      return { isDuplicate: true, matchedVoterId: voterId };
+function goTo(n) {
+  for (let i = 1; i <= 5; i++) {
+    const card = document.getElementById('step' + i);
+    const pb = document.getElementById('pb' + i);
+    const dot = pb.querySelector('.pn-dot');
+    if (i < n) {
+      card.classList.add('hidden'); pb.classList.remove('active'); pb.classList.add('done');
+      dot.textContent = '✓'; if (i <= 4) document.getElementById('pl' + i).classList.add('done');
+    } else if (i === n) {
+      card.classList.remove('hidden'); pb.classList.add('active'); pb.classList.remove('done');
+      dot.textContent = i;
+    } else {
+      card.classList.add('hidden'); pb.classList.remove('active','done');
+      dot.textContent = i; if (i <= 4) document.getElementById('pl' + i).classList.remove('done');
     }
   }
-  return { isDuplicate: false, matchedVoterId: null };
+  state.step = n;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// Returns true if incoming descriptor matches the voter's OWN stored descriptor
-function verifyOwnFace(incomingDescriptor, storedDescriptor) {
-  const dist = euclideanDistance(incomingDescriptor, storedDescriptor);
-  console.log(`   Own face match distance: ${dist.toFixed(4)} (pass if < 0.5)`);
-  return dist < 0.5;
+async function submitVoterId() {
+  const vid = document.getElementById('voterId').value.trim().toUpperCase();
+  const errEl = document.getElementById('voterError');
+  const btn = document.querySelector('#step1 .btn-primary');
+  if (!vid) { showErr(errEl, 'Please enter your Voter ID'); return; }
+  btn.innerHTML = '<span class="spinner"></span> Verifying...'; btn.disabled = true;
+  errEl.classList.add('hidden');
+  try {
+    const res = await fetch(`${API}/verify-voter`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ voterId: vid }) });
+    const data = await res.json();
+    if (!data.success) { showErr(errEl, data.message); return; }
+    state.voterId = vid; state.voterName = data.voterName;
+    document.getElementById('badgeName').textContent = data.voterName;
+    document.getElementById('badgeId').textContent = vid;
+    document.getElementById('otpSentAlert').innerHTML = `✅ OTP sent to ${data.maskedMobile}`;
+    if (data.devOTP) { document.getElementById('devOtpBox').classList.remove('hidden'); document.getElementById('devOtpVal').textContent = data.devOTP.split('').join(' '); }
+    startOTPTimer(); goTo(2);
+  } catch(e) { showErr(errEl, 'Cannot connect to server. Make sure backend is running.'); }
+  finally { btn.innerHTML = 'Verify Identity →'; btn.disabled = false; }
 }
 
-// ============================================================
-// 🔧 HELPERS
-// ============================================================
-
-function generateOTP() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+function startOTPTimer() {
+  if (state.otpInterval) clearInterval(state.otpInterval);
+  state.otpSeconds = 300;
+  state.otpInterval = setInterval(() => {
+    state.otpSeconds--;
+    const m = Math.floor(state.otpSeconds/60).toString().padStart(2,'0');
+    const s = (state.otpSeconds%60).toString().padStart(2,'0');
+    const el = document.getElementById('timerVal');
+    if (el) el.textContent = `${m}:${s}`;
+    if (state.otpSeconds <= 0) { clearInterval(state.otpInterval); if(el) el.textContent='EXPIRED'; }
+  }, 1000);
 }
 
-function generateSessionId() {
-  return crypto.randomBytes(32).toString('hex');
+function oMove(el, nextId) {
+  el.value = el.value.toString().slice(-1);
+  el.classList.toggle('filled', !!el.value);
+  if (el.value && nextId) document.getElementById(nextId).focus();
+}
+function oBk(el, e, prevId) { if (e.key==='Backspace' && !el.value && prevId) document.getElementById(prevId).focus(); }
+function getOTP() { return ['o1','o2','o3','o4','o5','o6'].map(id => document.getElementById(id).value).join(''); }
+
+async function resendOTP() {
+  ['o1','o2','o3','o4','o5','o6'].forEach(id => { const el=document.getElementById(id); el.value=''; el.classList.remove('filled'); });
+  await submitVoterId();
 }
 
-function maskMobile(mobile) {
-  return mobile.slice(0, 2) + '******' + mobile.slice(-2);
+async function submitOTP() {
+  const otp = getOTP();
+  const errEl = document.getElementById('otpError');
+  const btn = document.querySelector('#step2 .btn-primary');
+  if (otp.length < 6) { showErr(errEl, 'Please enter all 6 digits'); return; }
+  btn.innerHTML = '<span class="spinner"></span> Verifying...'; btn.disabled = true;
+  errEl.classList.add('hidden');
+  try {
+    const res = await fetch(`${API}/verify-otp`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ voterId: state.voterId, otp }) });
+    const data = await res.json();
+    if (!data.success) { showErr(errEl, data.message); return; }
+    state.sessionId = data.sessionId;
+    document.getElementById('fBadgeName').textContent = state.voterName;
+    document.getElementById('fBadgeId').textContent = state.voterId;
+    clearInterval(state.otpInterval); goTo(3);
+  } catch(e) { showErr(errEl, 'Server error. Please try again.'); }
+  finally { btn.innerHTML = 'Verify OTP →'; btn.disabled = false; }
 }
 
-// ============================================================
-// 📱 FAST2SMS — Real OTP SMS
-// On Render: set environment variable FAST2SMS_KEY
-// Locally: set it in your terminal or .env file
-// ============================================================
+let mediaStream = null;
 
-const FAST2SMS_API_KEY = process.env.FAST2SMS_KEY || 'YOUR_FAST2SMS_API_KEY';
+async function startFaceScan() {
+  const btn = document.getElementById('startScanBtn');
+  const errEl = document.getElementById('faceError');
+  const ring = document.getElementById('scanRing');
+  const statusEl = document.getElementById('scanStatus');
+  const timerEl = document.getElementById('scanTimer');
+  const video = document.getElementById('faceVideo');
+  errEl.classList.add('hidden');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Starting camera...';
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+    video.srcObject = mediaStream; video.style.display = 'block';
+    document.getElementById('scanEmoji').style.opacity = '0';
+    await new Promise(r => video.onloadedmetadata = r);
+    ring.classList.add('scanning');
+    statusEl.className = 'scan-status scanning'; statusEl.textContent = 'SCANNING — HOLD STILL';
+    timerEl.style.display = 'block'; btn.classList.add('hidden');
+    let secs = 30; document.getElementById('scanCountdown').textContent = secs;
+    state.scanCountdown = setInterval(async () => {
+      secs--; document.getElementById('scanCountdown').textContent = secs;
+      if (secs === 20) statusEl.textContent = 'ANALYZING BIOMETRICS...';
+      if (secs === 10) statusEl.textContent = 'LIVENESS VERIFIED...';
+      if (secs === 5)  statusEl.textContent = 'FINALIZING...';
+      if (secs <= 0) {
+        clearInterval(state.scanCountdown);
+        await sendFaceToServer(video);
+        stopCamera();
+      }
+    }, 1000);
+  } catch(err) {
+    showErr(errEl, 'Camera access denied. Please allow camera permissions.');
+    btn.disabled = false; btn.innerHTML = 'Start Face Scan 📷';
+  }
+}
 
-function sendSMS(mobile, otp) {
-  console.log(`\n📱 OTP [${otp}] → ${mobile}`);
+function stopCamera() {
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  document.getElementById('faceVideo').style.display = 'none';
+  document.getElementById('scanEmoji').style.opacity = '0.2';
+  document.getElementById('scanTimer').style.display = 'none';
+  document.getElementById('scanRing').classList.remove('scanning');
+}
 
-  if (FAST2SMS_API_KEY === 'YOUR_FAST2SMS_API_KEY') {
-    console.log(`⚠️  No Fast2SMS key. OTP visible in terminal only.\n`);
+async function sendFaceToServer(videoEl) {
+  const statusEl = document.getElementById('scanStatus');
+  const errEl = document.getElementById('faceError');
+  statusEl.textContent = 'COMPUTING FACE DESCRIPTOR...';
+  let faceDescriptor;
+  try {
+    if (faceModelsLoaded) {
+      const detection = await faceapi.detectSingleFace(videoEl, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 })).withFaceLandmarks().withFaceDescriptor();
+      if (!detection) {
+        statusEl.className = 'scan-status fail'; statusEl.textContent = '✗ NO FACE DETECTED';
+        showErr(errEl, 'Could not detect face. Ensure good lighting and face is clearly visible.');
+        document.getElementById('startScanBtn').classList.remove('hidden');
+        document.getElementById('startScanBtn').disabled = false;
+        document.getElementById('startScanBtn').innerHTML = 'Retry Face Scan 📷';
+        return;
+      }
+      faceDescriptor = Array.from(detection.descriptor);
+    } else {
+      showErr(errEl, 'Face models not loaded. Please refresh and try again.'); return;
+    }
+  } catch(e) {
+    showErr(errEl, 'Face detection error. Please retry.');
+    document.getElementById('startScanBtn').classList.remove('hidden');
+    document.getElementById('startScanBtn').disabled = false;
+    document.getElementById('startScanBtn').innerHTML = 'Retry Face Scan 📷';
     return;
   }
-
-  const msg = `Your SecureVote OTP is ${otp}. Valid 5 minutes. Do not share.`;
-  const options = {
-    hostname: 'www.fast2sms.com',
-    path: `/dev/bulkV2?authorization=${FAST2SMS_API_KEY}&route=q&message=${encodeURIComponent(msg)}&flash=0&numbers=${mobile}`,
-    method: 'GET',
-    headers: { 'cache-control': 'no-cache' }
-  };
-
-  const req = https.request(options, (res) => {
-    let data = '';
-    res.on('data', c => data += c);
-    res.on('end', () => {
-      try {
-        const p = JSON.parse(data);
-        console.log(p.return === true ? `✅ SMS sent to ${mobile}` : `❌ SMS error: ${p.message}`);
-      } catch { console.log('SMS raw response:', data); }
-    });
-  });
-  req.on('error', e => console.error('SMS failed:', e.message));
-  req.end();
+  statusEl.textContent = 'VERIFYING WITH SERVER...';
+  try {
+    const res = await fetch(`${API}/verify-face`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sessionId: state.sessionId, faceDescriptor }) });
+    const data = await res.json();
+    if (!data.success) {
+      statusEl.className = 'scan-status fail'; statusEl.textContent = '✗ VERIFICATION FAILED';
+      showErr(errEl, data.message);
+      document.getElementById('startScanBtn').classList.remove('hidden');
+      document.getElementById('startScanBtn').disabled = false;
+      document.getElementById('startScanBtn').innerHTML = 'Retry Face Scan 📷';
+      return;
+    }
+    statusEl.className = 'scan-status success'; statusEl.textContent = '✓ FACE VERIFIED';
+    await loadNominees(); setTimeout(() => goTo(4), 800);
+  } catch(e) {
+    statusEl.className = 'scan-status fail'; statusEl.textContent = 'SERVER ERROR';
+    showErr(errEl, 'Could not reach server.');
+    document.getElementById('startScanBtn').classList.remove('hidden');
+    document.getElementById('startScanBtn').disabled = false;
+    document.getElementById('startScanBtn').innerHTML = 'Retry Scan';
+  }
 }
 
-// ============================================================
-// 🌐 API ROUTES
-// ============================================================
-
-// 1. Verify Voter ID → send OTP
-app.post('/api/verify-voter', (req, res) => {
-  const { voterId } = req.body;
-  if (!voterId) return res.status(400).json({ success: false, message: 'Voter ID required' });
-
-  const voter = VOTER_DATABASE[voterId.toUpperCase()];
-  if (!voter)           return res.status(404).json({ success: false, message: 'Voter ID not found' });
-  if (voter.hasVoted)   return res.status(403).json({ success: false, message: 'This ID has already voted' });
-  if (!voter.faceRegistered) {
-    return res.status(403).json({ success: false, message: 'Face not registered for this ID. Contact admin.' });
-  }
-
-  const otp = generateOTP();
-  OTP_STORE[voterId.toUpperCase()] = { otp, expiry: Date.now() + 5 * 60 * 1000 };
-  sendSMS(voter.mobile, otp);
-
-  return res.json({
-    success: true,
-    maskedMobile: maskMobile(voter.mobile),
-    voterName: voter.name,
-    department: voter.department,
-    devOTP: process.env.NODE_ENV !== 'production' ? otp : undefined
-  });
-});
-
-// 2. Verify OTP
-app.post('/api/verify-otp', (req, res) => {
-  const { voterId, otp } = req.body;
-  const record = OTP_STORE[voterId?.toUpperCase()];
-
-  if (!record)                    return res.status(400).json({ success: false, message: 'No OTP found. Please restart.' });
-  if (Date.now() > record.expiry) return res.status(400).json({ success: false, message: 'OTP expired. Please restart.' });
-  if (record.otp !== otp)         return res.status(401).json({ success: false, message: 'Wrong OTP. Try again.' });
-
-  const sessionId = generateSessionId();
-  FACE_SESSIONS[sessionId] = {
-    voterId: voterId.toUpperCase(),
-    faceVerified: false,
-    expiry: Date.now() + 10 * 60 * 1000
-  };
-  delete OTP_STORE[voterId.toUpperCase()];
-
-  return res.json({ success: true, sessionId });
-});
-
-// 3. Verify Face — with full duplicate check
-// Frontend sends faceDescriptor: [128 numbers] computed by face-api.js
-app.post('/api/verify-face', (req, res) => {
-  const { sessionId, faceDescriptor } = req.body;
-  const session = FACE_SESSIONS[sessionId];
-
-  if (!session)                    return res.status(400).json({ success: false, message: 'Invalid session. Please restart.' });
-  if (Date.now() > session.expiry) return res.status(400).json({ success: false, message: 'Session expired.' });
-
-  if (!Array.isArray(faceDescriptor) || faceDescriptor.length !== 128) {
-    return res.status(400).json({ success: false, message: 'Invalid face data. Make sure face is visible.' });
-  }
-
-  const voter = VOTER_DATABASE[session.voterId];
-
-  // ── CHECK 1: Is this face already used by ANOTHER voter? ──
-  const { isDuplicate, matchedVoterId } = checkDuplicateFace(faceDescriptor, session.voterId);
-  if (isDuplicate) {
-    delete FACE_SESSIONS[sessionId]; // kill session immediately
-    console.log(`🚨 FRAUD BLOCKED: ${session.voterId} tried to use face of ${matchedVoterId}`);
-    return res.status(403).json({
-      success: false,
-      message: 'This face is registered under a different Voter ID. Attempt blocked and logged.'
+async function loadNominees() {
+  try {
+    const res = await fetch(`${API}/nominees?sessionId=${state.sessionId}`);
+    const data = await res.json();
+    if (!data.success) return;
+    const grid = document.getElementById('candidatesGrid');
+    grid.innerHTML = '';
+    data.nominees.forEach(n => {
+      const card = document.createElement('div');
+      card.className = 'candidate'; card.id = 'cand-' + n.id;
+      card.innerHTML = `<div class="cand-symbol">${n.symbol}</div><div class="cand-name">${n.name}</div><div class="cand-slogan">"${n.slogan}"</div>`;
+      card.onclick = () => selectNominee(n.id, n.name);
+      grid.appendChild(card);
     });
-  }
+  } catch(e) {}
+}
 
-  // ── CHECK 2: Does this face match THIS voter's own stored face? ──
-  const isMatch = verifyOwnFace(faceDescriptor, voter.faceDescriptor);
-  if (!isMatch) {
-    return res.status(401).json({
-      success: false,
-      message: 'Face does not match your registered photo. Try better lighting or contact admin.'
-    });
-  }
+function selectNominee(id, name) {
+  state.selectedNomineeId = id;
+  document.querySelectorAll('.candidate').forEach(c => c.classList.remove('selected'));
+  document.getElementById('cand-' + id).classList.add('selected');
+  document.getElementById('selectedName').textContent = name;
+  document.getElementById('voteConfirm').classList.add('show');
+  document.getElementById('castVoteBtn').disabled = false;
+}
 
-  // ── ALL GOOD ──
-  session.faceVerified = true;
-  console.log(`✅ Face verified: ${voter.name} (${session.voterId})`);
+async function castVote() {
+  if (!state.selectedNomineeId) return;
+  const btn = document.getElementById('castVoteBtn');
+  const errEl = document.getElementById('voteError');
+  btn.innerHTML = '<span class="spinner"></span> Submitting...'; btn.disabled = true;
+  errEl.classList.add('hidden');
+  try {
+    const res = await fetch(`${API}/cast-vote`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sessionId: state.sessionId, nomineeId: state.selectedNomineeId }) });
+    const data = await res.json();
+    if (!data.success) { showErr(errEl, data.message); btn.disabled=false; btn.innerHTML='✅ Submit Vote'; return; }
+    const r = data.receipt;
+    document.getElementById('r-id').textContent = state.voterId;
+    document.getElementById('r-name').textContent = state.voterName;
+    document.getElementById('r-cand').textContent = r.nomineeName;
+    document.getElementById('r-time').textContent = new Date(r.timestamp).toLocaleString('en-IN');
+    document.getElementById('r-hash').textContent = r.blockHash;
+    goTo(5);
+  } catch(e) { showErr(errEl, 'Failed to submit. Please try again.'); btn.disabled=false; btn.innerHTML='✅ Submit Vote'; }
+}
 
-  return res.json({ success: true, voterName: voter.name });
-});
-
-// 4. Get nominees (only after face verified)
-app.get('/api/nominees', (req, res) => {
-  const session = FACE_SESSIONS[req.query.sessionId];
-  if (!session?.faceVerified) return res.status(403).json({ success: false, message: 'Unauthorized' });
-
-  return res.json({
-    success: true,
-    nominees: NOMINEES.map(({ id, name, position, slogan, symbol }) => ({ id, name, position, slogan, symbol }))
-  });
-});
-
-// 5. Cast vote
-app.post('/api/cast-vote', (req, res) => {
-  const { sessionId, nomineeId } = req.body;
-  const session = FACE_SESSIONS[sessionId];
-
-  if (!session?.faceVerified) return res.status(403).json({ success: false, message: 'Unauthorized' });
-
-  const voter = VOTER_DATABASE[session.voterId];
-  if (voter.hasVoted) return res.status(403).json({ success: false, message: 'Already voted' });
-
-  const nominee = NOMINEES.find(n => n.id === nomineeId);
-  if (!nominee) return res.status(400).json({ success: false, message: 'Invalid nominee' });
-
-  nominee.votes++;
-  voter.hasVoted = true;
-
-  const blockHash = crypto.createHash('sha256')
-    .update(session.voterId + nomineeId + Date.now().toString())
-    .digest('hex');
-
-  VOTE_LOG.push({
-    voterId: session.voterId,
-    voterName: voter.name,
-    nomineeName: nominee.name,
-    timestamp: new Date().toISOString(),
-    blockHash
-  });
-
-  delete FACE_SESSIONS[sessionId];
-  console.log(`✅ VOTE: ${voter.name} → ${nominee.name}`);
-
-  return res.json({
-    success: true,
-    receipt: { voterName: voter.name, nomineeName: nominee.name, timestamp: new Date().toISOString(), blockHash }
-  });
-});
-
-// 6. Admin results (password-protected)
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin@secure2024';
-
-app.get('/api/admin/results', (req, res) => {
-  if (req.query.password !== ADMIN_PASSWORD) {
-    return res.status(401).json({ success: false, message: 'Wrong password' });
-  }
-  return res.json({
-    success: true,
-    totalVotes: VOTE_LOG.length,
-    results: NOMINEES.map(({ name, votes }) => ({ name, votes })),
-    voteLog: VOTE_LOG
-  });
-});
-
-// SPA fallback
-app.use(, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// ============================================================
-// 🚀 START SERVER
-// ============================================================
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🗳️  SecureVote on port ${PORT}`);
-  console.log(`📊  Admin: /api/admin/results?password=${ADMIN_PASSWORD}`);
-  console.log(`\n📋  Voter registry:`);
-  Object.entries(VOTER_DATABASE).forEach(([id, v]) =>
-    console.log(`    ${id} → ${v.name} | face: ${v.faceRegistered ? '✅ ready' : '❌ NOT registered'}`)
-  );
-  console.log('');
-});
+function showErr(el, msg) { el.textContent = '❌ ' + msg; el.classList.remove('hidden'); }
+</script>
+</body>
+</html>
