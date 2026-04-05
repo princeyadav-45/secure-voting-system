@@ -386,6 +386,21 @@ video#faceVideo {
     <div class="card-body">
       <div class="alert alert-info">ℹ️ Your Voter ID is your college enrollment number. It must be registered in the system by the admin before voting.</div>
       <div class="alert alert-danger hidden" id="voterError"></div>
+      
+      <!-- Register prompt - shows when voter ID not found -->
+      <div id="registerPrompt" class="hidden" style="background:#fff8e1;border:1px solid var(--saffron);border-left:4px solid var(--saffron);border-radius:4px;padding:14px 16px;margin-bottom:16px;">
+        <div style="font-weight:700;color:#e65100;margin-bottom:8px;">⚠️ Voter ID "<span id="pendingVoterId"></span>" not found!</div>
+        <div style="font-size:13px;color:#666;margin-bottom:10px;">Not registered yet? Register yourself below.</div>
+        <button class="btn btn-primary" style="background:var(--saffron);color:white;padding:10px;" onclick="showRegisterForm()">+ Register as New Voter</button>
+      </div>
+
+      <!-- Enroll prompt - shows when face not registered -->
+      <div id="enrollPrompt" class="hidden" style="background:#e8f5e9;border:1px solid var(--green);border-left:4px solid var(--green);border-radius:4px;padding:14px 16px;margin-bottom:16px;">
+        <div style="font-weight:700;color:var(--green);margin-bottom:8px;">✅ ID found! But face not enrolled yet.</div>
+        <div style="font-size:13px;color:#666;margin-bottom:10px;">Voter ID: <strong id="enrollVoterId"></strong> — Please enroll your face to continue.</div>
+        <button class="btn btn-primary" style="background:var(--green);color:white;padding:10px;" onclick="showEnrollForm()">📷 Enroll My Face</button>
+      </div>
+
       <div class="field">
         <label>Voter ID / College Enrollment Number</label>
         <input type="text" id="voterId" placeholder="e.g. CS2024001" maxlength="20" autocomplete="off" />
@@ -458,7 +473,7 @@ video#faceVideo {
           <div class="scan-beam"></div>
         </div>
         <div class="scan-status" id="scanStatus">READY TO SCAN</div>
-        <div class="scan-timer" id="scanTimer">Recording: <span id="scanCountdown">30</span>s remaining</div>
+        <div class="scan-timer" id="scanTimer">Recording: <span id="scanCountdown">10</span>s remaining</div>
       </div>
       <div class="alert alert-danger hidden" id="faceError"></div>
       <button class="btn btn-primary" id="startScanBtn" onclick="startFaceScan()">Start Face Scan 📷</button>
@@ -571,7 +586,21 @@ async function submitVoterId() {
   try {
     const res = await fetch(`${API}/verify-voter`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ voterId: vid }) });
     const data = await res.json();
-    if (!data.success) { showErr(errEl, data.message); return; }
+    if (!data.success) { 
+      showErr(errEl, data.message);
+      // If voter not found, show register option
+      if (data.message === 'Voter ID not found') {
+        document.getElementById('registerPrompt').classList.remove('hidden');
+        document.getElementById('pendingVoterId').textContent = vid;
+      }
+      // If face not registered, show enroll option
+      if (data.message === 'Face not registered. Contact admin.') {
+        state.voterId = vid;
+        document.getElementById('enrollPrompt').classList.remove('hidden');
+        document.getElementById('enrollVoterId').textContent = vid;
+      }
+      return; 
+    }
     state.voterId = vid; state.voterName = data.voterName;
     document.getElementById('badgeName').textContent = data.voterName;
     document.getElementById('badgeId').textContent = vid;
@@ -646,7 +675,7 @@ async function startFaceScan() {
     ring.classList.add('scanning');
     statusEl.className = 'scan-status scanning'; statusEl.textContent = 'SCANNING — HOLD STILL';
     timerEl.style.display = 'block'; btn.classList.add('hidden');
-    let secs = 30; document.getElementById('scanCountdown').textContent = secs;
+    let secs = 10; document.getElementById('scanCountdown').textContent = secs;
     state.scanCountdown = setInterval(async () => {
       secs--; document.getElementById('scanCountdown').textContent = secs;
       if (secs === 20) statusEl.textContent = 'ANALYZING BIOMETRICS...';
@@ -770,5 +799,248 @@ async function castVote() {
 
 function showErr(el, msg) { el.textContent = '❌ ' + msg; el.classList.remove('hidden'); }
 </script>
+
+<!-- REGISTER MODAL -->
+<div id="registerModal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:white;border-radius:8px;width:100%;max-width:500px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="background:var(--navy);color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="font-family:'Noto Serif',serif;font-size:16px;font-weight:700;">➕ Register as Voter</div>
+        <div style="font-size:12px;opacity:0.8;">Fill your details to register</div>
+      </div>
+      <button onclick="hideRegisterForm()" style="background:none;border:none;color:white;font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <div style="padding:20px;">
+      <div class="alert alert-danger hidden" id="regModalErr"></div>
+      <div class="alert alert-success hidden" id="regModalSuccess"></div>
+      <div class="field"><label>Voter ID / Enrollment Number</label><input type="text" id="regModalId" placeholder="e.g. CS2024001" /></div>
+      <div class="field"><label>Full Name</label><input type="text" id="regModalName" placeholder="Your full name" /></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field"><label>Date of Birth</label><input type="text" id="regModalDob" placeholder="DD/MM/YYYY" /></div>
+        <div class="field"><label>Mobile Number</label><input type="tel" id="regModalMobile" placeholder="10 digits" maxlength="10" /></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="field"><label>Department</label><input type="text" id="regModalDept" placeholder="e.g. Computer Science" /></div>
+        <div class="field"><label>Year</label>
+          <select id="regModalYear" style="width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:4px;color:var(--text);padding:11px 14px;font-size:15px;outline:none;">
+            <option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="submitSelfRegister()" style="margin-top:8px;">Register & Enroll Face →</button>
+    </div>
+  </div>
+</div>
+
+<!-- FACE ENROLL MODAL -->
+<div id="enrollModal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:white;border-radius:8px;width:100%;max-width:480px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div style="background:var(--green);color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="font-family:'Noto Serif',serif;font-size:16px;font-weight:700;">📷 Face Enrollment</div>
+        <div style="font-size:12px;opacity:0.8;">One time setup — saves automatically</div>
+      </div>
+      <button onclick="hideEnrollForm()" style="background:none;border:none;color:white;font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <div style="padding:20px;">
+      <div class="alert alert-warning">⚠️ Ensure good lighting. Look straight at camera.</div>
+      <div class="alert alert-danger hidden" id="enrollModalErr" style="margin-top:10px;"></div>
+      <div class="alert alert-success hidden" id="enrollModalSuccess" style="margin-top:10px;"></div>
+      <div style="display:flex;flex-direction:column;align-items:center;margin:16px 0;">
+        <div style="position:relative;width:160px;height:160px;margin-bottom:12px;">
+          <div id="enrollCircle" style="width:100%;height:100%;border-radius:50%;background:var(--bg);border:3px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;position:relative;">
+            <span id="enrollEmoji" style="font-size:60px;opacity:0.2;">🧑</span>
+            <video id="enrollVideo" autoplay muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%;display:none;transform:scaleX(-1);"></video>
+          </div>
+          <div id="enrollRing" style="position:absolute;inset:-5px;border-radius:50%;border:3px solid transparent;border-top-color:var(--green);opacity:0;"></div>
+        </div>
+        <div id="enrollStatus" style="font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);">CAMERA OFF</div>
+        <div id="enrollTimer" style="font-size:12px;color:var(--muted);margin-top:6px;display:none;">Scanning: <span id="enrollCountdown">10</span>s</div>
+      </div>
+      <button class="btn btn-primary" id="enrollStartBtn" onclick="startEnrollCamera()" style="background:var(--green);">📷 Start Camera & Enroll</button>
+      <button class="btn btn-outline" id="enrollRetryBtn" onclick="retryEnroll()" style="display:none;">🔄 Retry</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── SELF REGISTER ──
+function showRegisterForm() {
+  const vid = document.getElementById('voterId').value.trim().toUpperCase();
+  document.getElementById('regModalId').value = vid;
+  document.getElementById('registerModal').classList.remove('hidden');
+  document.getElementById('registerModal').style.display = 'flex';
+}
+function hideRegisterForm() {
+  document.getElementById('registerModal').classList.add('hidden');
+  document.getElementById('registerModal').style.display = 'none';
+}
+
+async function submitSelfRegister() {
+  const voterId  = document.getElementById('regModalId').value.trim();
+  const name     = document.getElementById('regModalName').value.trim();
+  const dob      = document.getElementById('regModalDob').value.trim();
+  const mobile   = document.getElementById('regModalMobile').value.trim();
+  const dept     = document.getElementById('regModalDept').value.trim();
+  const year     = document.getElementById('regModalYear').value;
+  const errEl    = document.getElementById('regModalErr');
+  const successEl= document.getElementById('regModalSuccess');
+  errEl.classList.add('hidden'); successEl.classList.add('hidden');
+
+  if (!voterId || !name || !dob || !mobile || !dept) {
+    errEl.textContent = '❌ Please fill all fields'; errEl.classList.remove('hidden'); return;
+  }
+  const btn = document.querySelector('#registerModal .btn-primary');
+  btn.innerHTML = '<span class="spinner"></span> Registering...'; btn.disabled = true;
+
+  try {
+    const res = await fetch(`${API}/admin/register-voter`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ adminPassword: 'self-register', voterId, name, dob, mobile, department: dept, year, selfRegister: true })
+    });
+    const data = await res.json();
+    if (!data.success) { errEl.textContent = '❌ ' + data.message; errEl.classList.remove('hidden'); return; }
+    successEl.textContent = '✅ Registered! Now enroll your face.';
+    successEl.classList.remove('hidden');
+    state.voterId = voterId.toUpperCase();
+    setTimeout(() => {
+      hideRegisterForm();
+      showEnrollForm();
+    }, 1500);
+  } catch(e) { errEl.textContent = '❌ Cannot connect to server.'; errEl.classList.remove('hidden'); }
+  finally { btn.innerHTML = 'Register & Enroll Face →'; btn.disabled = false; }
+}
+
+// ── FACE ENROLL ──
+function showEnrollForm() {
+  document.getElementById('enrollModal').classList.remove('hidden');
+  document.getElementById('enrollModal').style.display = 'flex';
+}
+function hideEnrollForm() {
+  stopEnrollCamera();
+  document.getElementById('enrollModal').classList.add('hidden');
+  document.getElementById('enrollModal').style.display = 'none';
+}
+
+let enrollStream = null;
+let enrollLoop = null;
+let enrollDescriptor = null;
+
+async function startEnrollCamera() {
+  const btn = document.getElementById('enrollStartBtn');
+  btn.innerHTML = '<span class="spinner"></span> Starting...'; btn.disabled = true;
+  try {
+    enrollStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+    const video = document.getElementById('enrollVideo');
+    video.srcObject = enrollStream; video.style.display = 'block';
+    document.getElementById('enrollEmoji').style.opacity = '0';
+    await new Promise(r => video.onloadedmetadata = r);
+    document.getElementById('enrollRing').style.opacity = '1';
+    document.getElementById('enrollRing').style.animation = 'spin 1s linear infinite';
+    document.getElementById('enrollStatus').textContent = 'SCANNING FACE...';
+    document.getElementById('enrollStatus').style.color = 'var(--navy)';
+    btn.classList.add('hidden');
+    document.getElementById('enrollTimer').style.display = 'block';
+
+    let secs = 10;
+    document.getElementById('enrollCountdown').textContent = secs;
+    const timerInterval = setInterval(async () => {
+      secs--;
+      document.getElementById('enrollCountdown').textContent = secs;
+      if (secs <= 0) {
+        clearInterval(timerInterval);
+        await captureAndSaveEnroll(video);
+        stopEnrollCamera();
+      }
+    }, 1000);
+
+    // Live detection
+    enrollLoop = setInterval(async () => {
+      if (!faceModelsLoaded) return;
+      try {
+        const det = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 })).withFaceLandmarks().withFaceDescriptor();
+        if (det) {
+          enrollDescriptor = Array.from(det.descriptor);
+          document.getElementById('enrollStatus').textContent = `✓ FACE DETECTED — ${Math.round(det.detection.score*100)}%`;
+          document.getElementById('enrollStatus').style.color = 'var(--green)';
+        } else {
+          document.getElementById('enrollStatus').textContent = 'NO FACE — MOVE CLOSER';
+          document.getElementById('enrollStatus').style.color = 'var(--danger)';
+        }
+      } catch(e) {}
+    }, 500);
+  } catch(e) {
+    document.getElementById('enrollModalErr').textContent = '❌ Camera access denied.';
+    document.getElementById('enrollModalErr').classList.remove('hidden');
+    btn.innerHTML = '📷 Start Camera & Enroll'; btn.disabled = false;
+  }
+}
+
+async function captureAndSaveEnroll(video) {
+  if (!enrollDescriptor) {
+    document.getElementById('enrollModalErr').textContent = '❌ No face detected. Please retry.';
+    document.getElementById('enrollModalErr').classList.remove('hidden');
+    document.getElementById('enrollRetryBtn').style.display = 'block';
+    return;
+  }
+  document.getElementById('enrollStatus').textContent = 'SAVING TO SERVER...';
+  try {
+    // Take fresh reading
+    if (faceModelsLoaded) {
+      const det = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 })).withFaceLandmarks().withFaceDescriptor();
+      if (det) enrollDescriptor = Array.from(det.descriptor);
+    }
+    const res = await fetch(`${API}/admin/save-face`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ adminPassword: 'self-register', voterId: state.voterId, faceDescriptor: enrollDescriptor, selfRegister: true })
+    });
+    const data = await res.json();
+    if (!data.success) {
+      document.getElementById('enrollModalErr').textContent = '❌ ' + data.message;
+      document.getElementById('enrollModalErr').classList.remove('hidden');
+      document.getElementById('enrollRetryBtn').style.display = 'block';
+      return;
+    }
+    document.getElementById('enrollModalSuccess').textContent = '✅ Face enrolled successfully! You can now vote.';
+    document.getElementById('enrollModalSuccess').classList.remove('hidden');
+    document.getElementById('enrollStatus').textContent = '✓ ENROLLED!';
+    document.getElementById('enrollStatus').style.color = 'var(--green)';
+    document.getElementById('enrollTimer').style.display = 'none';
+    setTimeout(() => {
+      hideEnrollForm();
+      document.getElementById('registerPrompt').classList.add('hidden');
+      document.getElementById('enrollPrompt').classList.add('hidden');
+      document.getElementById('voterError').classList.add('hidden');
+      document.getElementById('voterId').value = state.voterId;
+      submitVoterId();
+    }, 2000);
+  } catch(e) {
+    document.getElementById('enrollModalErr').textContent = '❌ Server error. Please retry.';
+    document.getElementById('enrollModalErr').classList.remove('hidden');
+    document.getElementById('enrollRetryBtn').style.display = 'block';
+  }
+}
+
+function stopEnrollCamera() {
+  if (enrollLoop) { clearInterval(enrollLoop); enrollLoop = null; }
+  if (enrollStream) { enrollStream.getTracks().forEach(t => t.stop()); enrollStream = null; }
+  document.getElementById('enrollVideo').style.display = 'none';
+  document.getElementById('enrollEmoji').style.opacity = '0.2';
+  document.getElementById('enrollRing').style.opacity = '0';
+  document.getElementById('enrollTimer').style.display = 'none';
+}
+
+function retryEnroll() {
+  enrollDescriptor = null;
+  document.getElementById('enrollStartBtn').classList.remove('hidden');
+  document.getElementById('enrollStartBtn').disabled = false;
+  document.getElementById('enrollStartBtn').innerHTML = '📷 Start Camera & Enroll';
+  document.getElementById('enrollRetryBtn').style.display = 'none';
+  document.getElementById('enrollModalErr').classList.add('hidden');
+  document.getElementById('enrollStatus').textContent = 'CAMERA OFF';
+  document.getElementById('enrollStatus').style.color = 'var(--muted)';
+}
+</script>
+
 </body>
 </html>
