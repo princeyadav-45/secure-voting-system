@@ -155,10 +155,13 @@ function sendSMS(mobile, otp) {
 // No more copy-paste needed!
 // ============================================================
 
-// Register new voter (admin)
+// Register new voter (admin OR self-registration)
 app.post('/api/admin/register-voter', async (req, res) => {
-  const { adminPassword, voterId, name, dob, mobile, department, year } = req.body;
-  if (adminPassword !== (process.env.ADMIN_PASSWORD || 'admin@secure2024')) {
+  const { adminPassword, voterId, name, dob, mobile, department, year, selfRegister } = req.body;
+  // Allow self-registration OR admin registration
+  const isAdmin = adminPassword === (process.env.ADMIN_PASSWORD || 'admin@secure2024');
+  const isSelfRegister = selfRegister === true && adminPassword === 'self-register';
+  if (!isAdmin && !isSelfRegister) {
     return res.status(401).json({ success: false, message: 'Wrong admin password' });
   }
   try {
@@ -172,10 +175,12 @@ app.post('/api/admin/register-voter', async (req, res) => {
   }
 });
 
-// Save face descriptor (from admin-register.html — auto saves to DB!)
+// Save face descriptor (admin OR self-registration)
 app.post('/api/admin/save-face', async (req, res) => {
-  const { adminPassword, voterId, faceDescriptor } = req.body;
-  if (adminPassword !== (process.env.ADMIN_PASSWORD || 'admin@secure2024')) {
+  const { adminPassword, voterId, faceDescriptor, selfRegister } = req.body;
+  const isAdmin = adminPassword === (process.env.ADMIN_PASSWORD || 'admin@secure2024');
+  const isSelfRegister = selfRegister === true && adminPassword === 'self-register';
+  if (!isAdmin && !isSelfRegister) {
     return res.status(401).json({ success: false, message: 'Wrong admin password' });
   }
   if (!Array.isArray(faceDescriptor) || faceDescriptor.length !== 128) {
