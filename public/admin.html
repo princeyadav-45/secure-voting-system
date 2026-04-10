@@ -6,19 +6,105 @@
 <title>SecureVote — Admin Panel</title>
 <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Noto+Serif:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Noto+Serif:wght@600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
 :root {
   --saffron: #FF9933; --white: #FFFFFF; --green: #138808;
   --navy: #000080; --bg: #f5f5f0; --card: #ffffff;
   --border: #d4d0c8; --text: #1a1a1a; --muted: #666;
   --danger: #cc0000;
+  --ids-safe: #1a7a3a;
+  --ids-warn: #b35c00;
+  --ids-danger: #9b0000;
+  --ids-bg-safe: #eafaf1;
+  --ids-bg-warn: #fff8e1;
+  --ids-bg-danger: #fff0f0;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: 'Noto Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* ===== TRICOLOR STRIPS ===== */
 .top-strip { background: var(--saffron); height: 5px; }
 .mid-strip { background: white; height: 5px; }
 .bot-strip { background: var(--green); height: 5px; }
+
+/* ===== IDS STATUS BAR ===== */
+#idsStatusBar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 20px; font-size: 12px; font-family: 'JetBrains Mono', monospace;
+  border-bottom: 1px solid; position: relative; overflow: hidden;
+  transition: background 0.4s, border-color 0.4s;
+}
+#idsStatusBar.safe   { background: var(--ids-bg-safe);   border-color: #a8e6c1; color: var(--ids-safe); }
+#idsStatusBar.warn   { background: var(--ids-bg-warn);   border-color: #f0c070; color: var(--ids-warn); }
+#idsStatusBar.danger { background: var(--ids-bg-danger); border-color: #f5a0a0; color: var(--ids-danger); }
+#idsStatusBar.locked { background: #1a0000; border-color: #8b0000; color: #ff6666; animation: lockPulse 1.5s ease-in-out infinite; }
+@keyframes lockPulse { 0%,100%{opacity:1} 50%{opacity:0.75} }
+
+.ids-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.safe   .ids-dot { background: var(--ids-safe); box-shadow: 0 0 6px var(--ids-safe); animation: blink 2s ease-in-out infinite; }
+.warn   .ids-dot { background: var(--ids-warn); box-shadow: 0 0 6px var(--ids-warn); animation: blink 1s ease-in-out infinite; }
+.danger .ids-dot { background: var(--ids-danger); box-shadow: 0 0 6px var(--ids-danger); animation: blink 0.5s ease-in-out infinite; }
+.locked .ids-dot { background: #ff3333; box-shadow: 0 0 12px #ff0000; animation: blink 0.4s ease-in-out infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.ids-label { font-weight: 600; letter-spacing: 1px; text-transform: uppercase; font-size: 11px; }
+.ids-pipe { opacity: 0.4; }
+.ids-detail { flex: 1; font-size: 11px; opacity: 0.9; }
+.ids-attempts { font-weight: 700; }
+.ids-time { margin-left: auto; font-size: 10px; opacity: 0.7; font-family: 'JetBrains Mono', monospace; }
+
+/* IDS Log panel (togglable) */
+#idsLogPanel {
+  background: #0a0a0a; color: #00ff88; font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; max-height: 0; overflow: hidden;
+  transition: max-height 0.35s ease; border-bottom: 1px solid #1a2a1a;
+}
+#idsLogPanel.open { max-height: 160px; }
+#idsLogInner { padding: 10px 20px; overflow-y: auto; max-height: 160px; }
+.log-line { margin-bottom: 3px; opacity: 0.85; }
+.log-line.warn-line { color: #ffcc44; }
+.log-line.danger-line { color: #ff5555; }
+.log-line.safe-line { color: #55ff99; }
+.ids-toggle-btn {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  background: transparent; border: 1px solid currentColor; border-radius: 3px;
+  font-size: 10px; padding: 2px 8px; cursor: pointer; color: inherit;
+  font-family: 'JetBrains Mono', monospace; letter-spacing: 0.5px; opacity: 0.7;
+}
+.ids-toggle-btn:hover { opacity: 1; }
+
+/* ===== BLOCKED OVERLAY ===== */
+#blockedOverlay {
+  display: none; position: fixed; inset: 0; z-index: 9999;
+  background: rgba(15,0,0,0.97); align-items: center; justify-content: center;
+  flex-direction: column; gap: 16px;
+}
+#blockedOverlay.show { display: flex; }
+.block-icon { font-size: 64px; animation: shakeIcon 0.5s ease; }
+@keyframes shakeIcon { 0%,100%{transform:rotate(0)} 20%{transform:rotate(-10deg)} 40%{transform:rotate(10deg)} 60%{transform:rotate(-8deg)} 80%{transform:rotate(8deg)} }
+.block-title { font-family: 'JetBrains Mono', monospace; color: #ff3333; font-size: 22px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+.block-sub { color: #cc9999; font-size: 13px; text-align: center; line-height: 1.6; }
+.block-countdown { font-family: 'JetBrains Mono', monospace; font-size: 48px; font-weight: 700; color: #ff6666; letter-spacing: 4px; }
+.block-label { font-family: 'JetBrains Mono', monospace; color: #884444; font-size: 11px; letter-spacing: 3px; text-transform: uppercase; }
+.block-warn-log { background: #1a0000; border: 1px solid #4a0000; border-radius: 6px; padding: 12px 20px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #ff9999; text-align: left; max-width: 380px; width: 100%; }
+.block-warn-log div { margin-bottom: 3px; }
+
+/* ===== NOTIFY TOAST ===== */
+#idsToast {
+  position: fixed; bottom: 24px; right: 24px; z-index: 9998;
+  background: #1a0a0a; color: #ff6666; border: 1px solid #cc0000;
+  border-radius: 8px; padding: 14px 18px; font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; max-width: 320px; box-shadow: 0 8px 32px rgba(200,0,0,0.3);
+  transform: translateX(400px); transition: transform 0.3s ease;
+  display: flex; align-items: flex-start; gap: 10px;
+}
+#idsToast.show { transform: translateX(0); }
+.toast-icon { font-size: 18px; flex-shrink: 0; }
+.toast-title { font-weight: 700; margin-bottom: 3px; letter-spacing: 0.5px; }
+.toast-body { color: #ffaaaa; font-size: 11px; line-height: 1.5; }
+
+/* ===== GOV HEADER ===== */
 .gov-header {
   background: white; border-bottom: 2px solid var(--border);
   padding: 14px 24px; display: flex; align-items: center; gap: 16px;
@@ -38,10 +124,19 @@ body { font-family: 'Noto Sans', sans-serif; background: var(--bg); color: var(-
   color: #e65100; padding: 4px 12px; border-radius: 4px;
   font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
 }
+/* Session timer pill */
+.session-pill {
+  background: #e8eaf6; border: 1px solid var(--navy);
+  color: var(--navy); padding: 4px 12px; border-radius: 4px;
+  font-size: 11px; font-weight: 700; font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.5px; display: none; gap: 6px; align-items: center;
+}
+.session-pill.warn-session { background: #fff3e0; border-color: var(--saffron); color: #b35c00; }
+.session-pill.danger-session { background: #ffebee; border-color: var(--danger); color: var(--danger); animation: blink 1s ease-in-out infinite; }
 
 .main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
 
-/* LOGIN */
+/* ===== LOGIN ===== */
 .login-wrap {
   max-width: 420px; margin: 60px auto;
   background: var(--card); border: 1px solid var(--border);
@@ -52,6 +147,16 @@ body { font-family: 'Noto Sans', sans-serif; background: var(--bg); color: var(-
 .login-title { font-family: 'Noto Serif', serif; font-size: 18px; font-weight: 700; }
 .login-sub { font-size: 12px; opacity: 0.8; margin-top: 4px; }
 .login-body { padding: 24px; }
+
+/* Attempt indicator dots */
+.attempt-dots { display: flex; gap: 6px; margin-bottom: 14px; align-items: center; }
+.attempt-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #ddd; border: 1px solid #ccc; transition: all 0.3s;
+}
+.attempt-dot.used { background: var(--danger); border-color: var(--danger); box-shadow: 0 0 6px rgba(204,0,0,0.4); }
+.attempt-dot.last { background: var(--saffron); border-color: var(--saffron); box-shadow: 0 0 6px rgba(255,153,51,0.4); animation: blink 0.8s ease-in-out infinite; }
+.attempt-label { font-size: 10px; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-left: 4px; }
 
 /* TABS */
 .tabs { display: flex; gap: 2px; background: var(--bg); border-radius: 6px; padding: 4px; margin-bottom: 24px; border: 1px solid var(--border); }
@@ -79,16 +184,16 @@ body { font-family: 'Noto Sans', sans-serif; background: var(--bg); color: var(-
 
 /* ALERT */
 .alert { padding: 10px 14px; border-radius: 4px; font-size: 13px; margin-bottom: 14px; border-left: 4px solid; }
-.alert-info { background: #e8eaf6; border-color: var(--navy); color: var(--navy); }
-.alert-success { background: #e8f5e9; border-color: var(--green); color: #1b5e20; }
-.alert-danger { background: #ffebee; border-color: var(--danger); color: var(--danger); }
-.alert-warning { background: #fff8e1; border-color: var(--saffron); color: #e65100; }
+.alert-info    { background: #e8eaf6; border-color: var(--navy);   color: var(--navy); }
+.alert-success { background: #e8f5e9; border-color: var(--green);  color: #1b5e20; }
+.alert-danger  { background: #ffebee; border-color: var(--danger); color: var(--danger); }
+.alert-warning { background: #fff8e1; border-color: var(--saffron);color: #e65100; }
 
 /* BUTTONS */
 .btn { width: 100%; padding: 12px; border: none; border-radius: 4px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; font-family: 'Noto Sans', sans-serif; }
-.btn-navy { background: var(--navy); color: white; }
-.btn-navy:hover { background: #000066; }
-.btn-navy:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-navy  { background: var(--navy);  color: white; }
+.btn-navy:hover  { background: #000066; }
+.btn-navy:disabled  { opacity: 0.5; cursor: not-allowed; }
 .btn-green { background: var(--green); color: white; }
 .btn-green:hover { background: #0d6b06; }
 .btn-green:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -122,8 +227,8 @@ video#regVideo {
 .cam-right { flex: 1; }
 .cam-status { font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
 .cam-status.scanning { color: var(--navy); }
-.cam-status.success { color: var(--green); }
-.cam-status.fail { color: var(--danger); }
+.cam-status.success  { color: var(--green); }
+.cam-status.fail     { color: var(--danger); }
 
 /* QUALITY BARS */
 .quality-bars { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; }
@@ -131,7 +236,7 @@ video#regVideo {
 .qb-row:last-child { margin-bottom: 0; }
 .qb-label { font-size: 10px; color: var(--muted); font-weight: 600; width: 90px; text-transform: uppercase; }
 .qb-track { flex: 1; height: 6px; background: #ddd; border-radius: 4px; overflow: hidden; }
-.qb-fill { height: 100%; border-radius: 4px; background: var(--muted); width: 0%; transition: width 0.4s, background 0.4s; }
+.qb-fill  { height: 100%; border-radius: 4px; background: var(--muted); width: 0%; transition: width 0.4s, background 0.4s; }
 
 /* VOTER TABLE */
 .voter-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -142,16 +247,12 @@ video#regVideo {
 .voter-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .voter-table tr:hover td { background: var(--bg); }
 .voter-table tr:last-child td { border-bottom: none; }
-.face-tag {
-  display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;
-}
-.face-tag.yes { background: #e8f5e9; color: var(--green); border: 1px solid var(--green); }
-.face-tag.no { background: #ffebee; color: var(--danger); border: 1px solid var(--danger); }
-.voted-tag {
-  display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;
-}
+.face-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+.face-tag.yes  { background: #e8f5e9; color: var(--green); border: 1px solid var(--green); }
+.face-tag.no   { background: #ffebee; color: var(--danger); border: 1px solid var(--danger); }
+.voted-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
 .voted-tag.yes { background: #e8eaf6; color: var(--navy); border: 1px solid var(--navy); }
-.voted-tag.no { background: #f5f5f0; color: var(--muted); border: 1px solid var(--border); }
+.voted-tag.no  { background: #f5f5f0; color: var(--muted); border: 1px solid var(--border); }
 
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 20px; }
 .card-header-nav { background: var(--navy); color: white; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
@@ -161,50 +262,155 @@ video#regVideo {
 .spinner-dark { border-color: rgba(0,0,0,0.2); border-top-color: var(--navy); }
 .hidden { display: none !important; }
 
-/* MODEL LOADER */
 .model-loader { text-align: center; padding: 30px 20px; }
 .model-spinner { width: 40px; height: 40px; border: 4px solid #ddd; border-top-color: var(--navy); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 14px; }
 .model-text { font-size: 13px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
 
 .section-divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+/* IDS Security widget in dashboard */
+.ids-widget {
+  background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
+  padding: 16px 20px; margin-bottom: 20px; font-family: 'JetBrains Mono', monospace;
+}
+.ids-widget-title { color: #58a6ff; font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.ids-widget-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.ids-stat { background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 12px; text-align: center; }
+.ids-stat-val { font-size: 24px; font-weight: 700; color: #58a6ff; }
+.ids-stat-val.ok  { color: #3fb950; }
+.ids-stat-val.bad { color: #f85149; }
+.ids-stat-val.mid { color: #d29922; }
+.ids-stat-lbl { font-size: 9px; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+.ids-recent { margin-top: 12px; background: #161b22; border: 1px solid #21262d; border-radius: 6px; padding: 10px 14px; }
+.ids-recent-title { font-size: 9px; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+.ids-event { font-size: 10px; color: #c9d1d9; display: flex; gap: 10px; margin-bottom: 4px; align-items: center; }
+.ids-event:last-child { margin-bottom: 0; }
+.ids-event-badge { padding: 1px 6px; border-radius: 3px; font-size: 9px; font-weight: 700; flex-shrink: 0; }
+.badge-safe   { background: #1c4a1c; color: #3fb950; }
+.badge-warn   { background: #4a3800; color: #d29922; }
+.badge-danger { background: #4a0a0a; color: #f85149; }
+.ids-event-msg { flex: 1; }
+.ids-event-time { color: #8b949e; font-size: 9px; flex-shrink: 0; }
 </style>
 </head>
 <body>
+
+<!-- TRICOLOR -->
 <div class="top-strip"></div>
 <div class="mid-strip"></div>
 <div class="bot-strip"></div>
 
+<!-- ===== IDS STATUS BAR ===== -->
+<div id="idsStatusBar" class="safe">
+  <div class="ids-dot"></div>
+  <span class="ids-label">IDS</span>
+  <span class="ids-pipe">|</span>
+  <span class="ids-detail" id="idsDetailText">Intrusion Detection System — Monitoring Active</span>
+  <button class="ids-toggle-btn" onclick="toggleIdsLog()">LOG ▾</button>
+</div>
+
+<!-- IDS LOG PANEL -->
+<div id="idsLogPanel">
+  <div id="idsLogInner">
+    <div class="log-line safe-line">[BOOT] IDS initialized — SecureVote Admin Panel</div>
+  </div>
+</div>
+
+<!-- BLOCKED OVERLAY -->
+<div id="blockedOverlay">
+  <div class="block-icon">🔒</div>
+  <div class="block-title">Access Blocked</div>
+  <div class="block-sub">Too many failed login attempts detected.<br>Admin panel is temporarily locked for security.</div>
+  <div class="block-countdown" id="blockCountdown">15:00</div>
+  <div class="block-label">Time remaining</div>
+  <div class="block-warn-log" id="blockLog"></div>
+</div>
+
+<!-- TOAST NOTIFICATION -->
+<div id="idsToast">
+  <div class="toast-icon">⚠️</div>
+  <div>
+    <div class="toast-title" id="toastTitle">Security Alert</div>
+    <div class="toast-body" id="toastBody">Suspicious activity detected.</div>
+  </div>
+</div>
+
+<!-- GOV HEADER -->
 <div class="gov-header">
   <div class="emblem">🔐</div>
   <div class="htext">
     <div class="hmain">SecureVote — Admin Panel</div>
     <div class="hsub">Voter Registration · Face Enrollment · Results Management</div>
   </div>
+  <div id="sessionPill" class="session-pill">⏱ Session: <span id="sessionTimer">10:00</span></div>
   <div class="admin-pill">ADMIN ACCESS</div>
 </div>
 
 <div class="main">
 
-  <!-- LOGIN -->
+  <!-- ===== LOGIN ===== -->
   <div id="loginSection">
     <div class="login-wrap">
       <div class="login-header">
         <div class="login-title">Admin Login</div>
-        <div class="login-sub">Authorized personnel only</div>
+        <div class="login-sub">Authorized personnel only · Protected by IDS</div>
       </div>
       <div class="login-body">
+        <!-- Attempt Indicator -->
+        <div class="attempt-dots" id="attemptDots">
+          <div class="attempt-dot" id="dot1"></div>
+          <div class="attempt-dot" id="dot2"></div>
+          <div class="attempt-dot" id="dot3"></div>
+          <div class="attempt-dot" id="dot4"></div>
+          <div class="attempt-dot" id="dot5"></div>
+          <span class="attempt-label" id="attemptLabel">5 attempts remaining</span>
+        </div>
         <div class="alert alert-danger hidden" id="loginErr"></div>
         <div class="field">
           <label>Admin Password</label>
-          <input type="password" id="adminPwd" placeholder="Enter admin password" onkeydown="if(event.key==='Enter') adminLogin()" />
+          <input type="password" id="adminPwd" placeholder="Enter admin password"
+            onkeydown="if(event.key==='Enter') adminLogin()" />
         </div>
         <button class="btn btn-navy" onclick="adminLogin()">Login →</button>
       </div>
     </div>
   </div>
 
-  <!-- DASHBOARD -->
+  <!-- ===== DASHBOARD ===== -->
   <div id="adminDashboard" class="hidden">
+
+    <!-- IDS SECURITY WIDGET -->
+    <div class="ids-widget">
+      <div class="ids-widget-title">🛡 IDS — Live Security Dashboard</div>
+      <div class="ids-widget-grid">
+        <div class="ids-stat">
+          <div class="ids-stat-val ok" id="wStatStatus">ACTIVE</div>
+          <div class="ids-stat-lbl">IDS Status</div>
+        </div>
+        <div class="ids-stat">
+          <div class="ids-stat-val ok" id="wStatAttempts">0</div>
+          <div class="ids-stat-lbl">Failed Logins</div>
+        </div>
+        <div class="ids-stat">
+          <div class="ids-stat-val ok" id="wStatSession">—</div>
+          <div class="ids-stat-lbl">Session Time</div>
+        </div>
+        <div class="ids-stat">
+          <div class="ids-stat-val" id="wStatEvents">0</div>
+          <div class="ids-stat-lbl">IDS Events</div>
+        </div>
+      </div>
+      <div class="ids-recent">
+        <div class="ids-recent-title">Recent Security Events</div>
+        <div id="idsEventList">
+          <div class="ids-event">
+            <span class="ids-event-badge badge-safe">INFO</span>
+            <span class="ids-event-msg">IDS monitoring started</span>
+            <span class="ids-event-time" id="bootTime"></span>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- TABS -->
     <div class="tabs">
@@ -217,9 +423,7 @@ video#regVideo {
     <!-- TAB 1: REGISTER VOTER -->
     <div class="tab-content active" id="tab-register">
       <div class="card">
-        <div class="card-header-nav">
-          <div class="ch-title">➕ Register New Voter</div>
-        </div>
+        <div class="card-header-nav"><div class="ch-title">➕ Register New Voter</div></div>
         <div class="card-body">
           <div class="alert alert-info">ℹ️ Add student details here. Face enrollment is done separately in the "Enroll Face" tab.</div>
           <div class="alert alert-danger hidden" id="regErr"></div>
@@ -254,8 +458,6 @@ video#regVideo {
           <span style="font-size:12px;opacity:0.8;">Auto-saves to database</span>
         </div>
         <div class="card-body">
-
-          <!-- Model loading -->
           <div id="modelLoadSection">
             <div class="model-loader">
               <div class="model-spinner"></div>
@@ -263,7 +465,6 @@ video#regVideo {
               <div id="modelProgress" style="font-size:12px;color:var(--navy);margin-top:8px;"></div>
             </div>
           </div>
-
           <div id="faceEnrollSection" class="hidden">
             <div class="alert alert-success">✅ Face models loaded! No copy-paste needed — descriptor saves automatically to database.</div>
             <div class="field">
@@ -275,7 +476,6 @@ video#regVideo {
             <div id="selectedVoterInfo" class="hidden">
               <div class="alert alert-info" id="voterInfoAlert"></div>
             </div>
-
             <div class="cam-section">
               <div class="cam-circle-wrap" id="camRingWrap">
                 <div class="cam-circle">
@@ -294,10 +494,8 @@ video#regVideo {
                 </div>
               </div>
             </div>
-
             <div class="alert alert-danger hidden" id="faceEnrollErr"></div>
             <div class="alert alert-success hidden" id="faceEnrollSuccess"></div>
-
             <button class="btn btn-navy" id="startCamBtn" onclick="startEnrollCamera()">📷 Start Camera</button>
             <button class="btn btn-green hidden" id="captureEnrollBtn" onclick="captureAndSaveFace()">✅ Capture & Save to Database</button>
             <button class="btn btn-outline hidden" id="retryEnrollBtn" onclick="retryEnroll()">🔄 Retry</button>
@@ -337,10 +535,14 @@ video#regVideo {
     </div>
 
   </div><!-- end dashboard -->
-</div>
+</div><!-- end main -->
 
+<!-- ============================================================ -->
+<!-- SCRIPT                                                        -->
+<!-- ============================================================ -->
 <script>
-const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:3000/api' : '/api';
+const API = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? 'http://localhost:3000/api' : '/api';
 const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model';
 
 let adminPassword = '';
@@ -349,39 +551,394 @@ let enrollStream = null;
 let detectionLoop = null;
 let currentDescriptor = null;
 
-// ── LOGIN ──
+// ================================================================
+// IDS — Intrusion Detection System
+// ================================================================
+const IDS = {
+  MAX_ATTEMPTS:    5,
+  WARN_AT:         3,      // notify after 3rd failure
+  LOCKOUT_SECS:    15 * 60, // 15 minutes
+  INACTIVITY_SECS: 10 * 60, // 10 min session timeout
+  STORAGE_KEY:     'sv_ids',
+
+  // --- State ---
+  state: {
+    attempts:        0,
+    lockedUntil:     null,   // timestamp ms or null
+    events:          [],     // [{type, msg, ts}]
+    loginTime:       null,
+    sessionExpiry:   null,
+  },
+
+  // --- Persist to sessionStorage ---
+  save() {
+    try { sessionStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.state)); } catch(e) {}
+  },
+  load() {
+    try {
+      const raw = sessionStorage.getItem(this.STORAGE_KEY);
+      if (raw) { const d = JSON.parse(raw); Object.assign(this.state, d); }
+    } catch(e) {}
+  },
+
+  // --- Init ---
+  init() {
+    this.load();
+    document.getElementById('bootTime').textContent = this.fmtTime(new Date());
+    this.checkLock();          // restore lock if still active
+    this.updateBar();
+    this.updateDots();
+  },
+
+  // --- Check if currently locked ---
+  checkLock() {
+    if (this.state.lockedUntil && Date.now() < this.state.lockedUntil) {
+      this.showBlockOverlay();
+      this.startLockdownTimer();
+      return true;
+    } else if (this.state.lockedUntil && Date.now() >= this.state.lockedUntil) {
+      // Lockout expired, reset
+      this.state.lockedUntil = null;
+      this.state.attempts = 0;
+      this.save();
+      this.log('INFO', 'Lockout expired — attempts reset', 'safe');
+    }
+    return false;
+  },
+
+  // --- Record a failed login ---
+  failedLogin(pwdLen) {
+    this.state.attempts++;
+    this.save();
+
+    const remaining = this.MAX_ATTEMPTS - this.state.attempts;
+    const hour = new Date().getHours();
+    const offHours = (hour < 7 || hour > 22);
+
+    // Log the event
+    this.log('WARN', `Failed login attempt #${this.state.attempts} — ${remaining} attempt(s) left`, 'warn');
+    if (offHours) this.log('WARN', `Off-hours login attempt detected (${hour}:00)`, 'warn');
+
+    // 3rd attempt → toast notify
+    if (this.state.attempts === this.WARN_AT) {
+      this.showToast(
+        '⚠️ Security Warning',
+        `3 failed login attempts detected.\n${this.MAX_ATTEMPTS - this.WARN_AT} attempt(s) remaining before 15-min lockout.`
+      );
+      this.log('DANGER', 'ALERT: 3 failed attempts — lockout imminent', 'danger');
+    }
+
+    // 5th attempt → LOCK
+    if (this.state.attempts >= this.MAX_ATTEMPTS) {
+      this.triggerLockout();
+      return;
+    }
+
+    this.updateBar();
+    this.updateDots();
+    this.updateWidget();
+  },
+
+  // --- Trigger full lockout ---
+  triggerLockout() {
+    this.state.lockedUntil = Date.now() + (this.LOCKOUT_SECS * 1000);
+    this.save();
+    this.log('DANGER', `LOCKOUT TRIGGERED — blocked for ${this.LOCKOUT_SECS/60} minutes`, 'danger');
+    this.showBlockOverlay();
+    this.startLockdownTimer();
+    this.updateBar('locked');
+  },
+
+  // --- Successful login ---
+  successLogin() {
+    this.state.attempts = 0;
+    this.state.lockedUntil = null;
+    this.state.loginTime = Date.now();
+    this.state.sessionExpiry = Date.now() + (this.INACTIVITY_SECS * 1000);
+    this.save();
+    this.log('INFO', `Admin authenticated successfully`, 'safe');
+    this.updateBar();
+    this.updateDots();
+    this.updateWidget();
+    this.startSessionTimer();
+    this.startInactivityWatch();
+  },
+
+  // --- Logout ---
+  logout(reason) {
+    reason = reason || 'Manual logout';
+    this.log('INFO', `Session ended: ${reason}`, 'safe');
+    this.state.loginTime = null;
+    this.state.sessionExpiry = null;
+    this.save();
+    clearInterval(this._sessionInterval);
+    clearTimeout(this._inactivityTimer);
+    document.getElementById('sessionPill').style.display = 'none';
+    adminPassword = '';
+    document.getElementById('adminDashboard').classList.add('hidden');
+    document.getElementById('loginSection').classList.remove('hidden');
+    document.getElementById('adminPwd').value = '';
+    this.updateBar();
+    this.updateDots();
+  },
+
+  // ── Lockdown countdown ──
+  startLockdownTimer() {
+    clearInterval(this._lockInterval);
+    this._lockInterval = setInterval(() => {
+      const left = Math.max(0, Math.ceil((this.state.lockedUntil - Date.now()) / 1000));
+      const m = String(Math.floor(left / 60)).padStart(2,'0');
+      const s = String(left % 60).padStart(2,'0');
+      document.getElementById('blockCountdown').textContent = `${m}:${s}`;
+      if (left <= 0) {
+        clearInterval(this._lockInterval);
+        this.state.lockedUntil = null;
+        this.state.attempts = 0;
+        this.save();
+        document.getElementById('blockedOverlay').classList.remove('show');
+        this.log('INFO', 'Lockout expired — system restored', 'safe');
+        this.updateBar();
+        this.updateDots();
+      }
+    }, 1000);
+  },
+
+  // ── Session countdown ──
+  startSessionTimer() {
+    const pill = document.getElementById('sessionPill');
+    pill.style.display = 'flex';
+    clearInterval(this._sessionInterval);
+    this._sessionInterval = setInterval(() => {
+      if (!this.state.sessionExpiry) { clearInterval(this._sessionInterval); return; }
+      const left = Math.max(0, Math.ceil((this.state.sessionExpiry - Date.now()) / 1000));
+      const m = String(Math.floor(left / 60)).padStart(2,'0');
+      const s = String(left % 60).padStart(2,'0');
+      document.getElementById('sessionTimer').textContent = `${m}:${s}`;
+      document.getElementById('wStatSession').textContent = `${m}:${s}`;
+
+      // Color warnings
+      pill.className = 'session-pill';
+      if (left <= 60)  pill.className = 'session-pill danger-session';
+      else if (left <= 120) pill.className = 'session-pill warn-session';
+
+      if (left <= 0) {
+        clearInterval(this._sessionInterval);
+        this.log('WARN', 'Session expired due to inactivity', 'warn');
+        this.logout('Session expired — inactivity timeout');
+      }
+    }, 1000);
+  },
+
+  // ── Inactivity reset on any user action ──
+  startInactivityWatch() {
+    const reset = () => {
+      if (!this.state.sessionExpiry) return;
+      this.state.sessionExpiry = Date.now() + (this.INACTIVITY_SECS * 1000);
+      this.save();
+    };
+    ['mousemove','keydown','click','scroll'].forEach(ev => {
+      clearTimeout(this._inactivityTimer);
+      document.addEventListener(ev, reset, { passive: true });
+    });
+  },
+
+  // ── Update IDS status bar ──
+  updateBar(forceState) {
+    const bar = document.getElementById('idsStatusBar');
+    const detail = document.getElementById('idsDetailText');
+    const now = new Date().toLocaleTimeString();
+
+    if (forceState === 'locked') {
+      bar.className = 'locked';
+      detail.textContent = `🔒 LOCKED — Too many failed attempts. 15-min lockout active.`;
+      return;
+    }
+
+    if (this.state.attempts === 0) {
+      bar.className = 'safe';
+      detail.textContent = `Monitoring Active — No threats detected  ·  ${now}`;
+    } else if (this.state.attempts < this.WARN_AT) {
+      bar.className = 'warn';
+      detail.textContent = `⚠ ${this.state.attempts} failed attempt(s) — ${this.MAX_ATTEMPTS - this.state.attempts} remaining`;
+    } else if (this.state.attempts < this.MAX_ATTEMPTS) {
+      bar.className = 'danger';
+      detail.textContent = `🚨 ALERT: ${this.state.attempts} failed attempts — 1 attempt left before LOCKOUT`;
+    }
+
+    document.getElementById('idsTime')?.remove();
+    const t = document.createElement('span');
+    t.id = 'idsTime'; t.className = 'ids-time'; t.textContent = now;
+    bar.appendChild(t);
+  },
+
+  // ── Update attempt dots on login screen ──
+  updateDots() {
+    const labels = ['5','4','3','2','1'];
+    for (let i = 1; i <= 5; i++) {
+      const dot = document.getElementById('dot' + i);
+      dot.className = 'attempt-dot';
+      if (i <= this.state.attempts) {
+        dot.className = (i === this.state.attempts && this.state.attempts === this.WARN_AT)
+          ? 'attempt-dot last' : 'attempt-dot used';
+      }
+    }
+    const rem = Math.max(0, this.MAX_ATTEMPTS - this.state.attempts);
+    document.getElementById('attemptLabel').textContent =
+      rem === 0 ? 'Locked!' :
+      rem === 1 ? '⚠️ Last attempt!' :
+      `${rem} attempt${rem!==1?'s':''} remaining`;
+  },
+
+  // ── Update widget stats ──
+  updateWidget() {
+    document.getElementById('wStatAttempts').textContent = this.state.attempts;
+    const el = document.getElementById('wStatAttempts');
+    el.className = 'ids-stat-val ' + (this.state.attempts === 0 ? 'ok' : this.state.attempts < 3 ? 'mid' : 'bad');
+    document.getElementById('wStatEvents').textContent = this.state.events.length;
+  },
+
+  // ── Append to IDS log ──
+  log(type, msg, severity) {
+    const ts = new Date();
+    this.state.events.push({ type, msg, ts: ts.toISOString() });
+    if (this.state.events.length > 50) this.state.events.shift();
+    this.save();
+
+    // Terminal log
+    const logInner = document.getElementById('idsLogInner');
+    const line = document.createElement('div');
+    line.className = `log-line ${severity === 'danger' ? 'danger-line' : severity === 'warn' ? 'warn-line' : 'safe-line'}`;
+    line.textContent = `[${this.fmtTime(ts)}] [${type}] ${msg}`;
+    logInner.appendChild(line);
+    logInner.scrollTop = logInner.scrollHeight;
+
+    // Dashboard event list
+    const evList = document.getElementById('idsEventList');
+    if (evList) {
+      const ev = document.createElement('div');
+      ev.className = 'ids-event';
+      const badgeClass = severity === 'danger' ? 'badge-danger' : severity === 'warn' ? 'badge-warn' : 'badge-safe';
+      ev.innerHTML = `
+        <span class="ids-event-badge ${badgeClass}">${type}</span>
+        <span class="ids-event-msg">${msg}</span>
+        <span class="ids-event-time">${this.fmtTime(ts)}</span>
+      `;
+      evList.insertBefore(ev, evList.firstChild);
+      // Keep only 5 in widget
+      while (evList.children.length > 5) evList.removeChild(evList.lastChild);
+    }
+
+    this.updateWidget();
+  },
+
+  // ── Show block overlay ──
+  showBlockOverlay() {
+    const overlay = document.getElementById('blockedOverlay');
+    overlay.classList.add('show');
+    // Populate block log
+    const blockLog = document.getElementById('blockLog');
+    const recent = this.state.events.slice(-5);
+    blockLog.innerHTML = recent.map(e =>
+      `<div>[${this.fmtTime(new Date(e.ts))}] ${e.type}: ${e.msg}</div>`
+    ).join('');
+    this.updateBar('locked');
+  },
+
+  // ── Toast notification ──
+  showToast(title, body) {
+    document.getElementById('toastTitle').textContent = title;
+    document.getElementById('toastBody').textContent = body;
+    const toast = document.getElementById('idsToast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 6000);
+  },
+
+  fmtTime(d) {
+    return d.toLocaleTimeString('en-IN', { hour12: false });
+  }
+};
+
+// IDS Log toggle
+function toggleIdsLog() {
+  document.getElementById('idsLogPanel').classList.toggle('open');
+}
+
+// ── Refresh IDS bar clock every 30s ──
+setInterval(() => IDS.updateBar(), 30000);
+
+// ================================================================
+// ADMIN LOGIN (IDS-protected)
+// ================================================================
 async function adminLogin() {
+  if (IDS.checkLock()) return;
+
   const pwd = document.getElementById('adminPwd').value.trim();
   const errEl = document.getElementById('loginErr');
   if (!pwd) { showEl(errEl, '❌ Enter password', 'danger'); return; }
+
   const btn = document.querySelector('#loginSection .btn-navy');
   btn.innerHTML = '<span class="spinner"></span> Checking...'; btn.disabled = true;
+
   try {
-    const res = await fetch(`${API}/admin/results?password=${encodeURIComponent(pwd)}`);
-    const data = await res.json();
-    if (!data.success) { showEl(errEl, '❌ Wrong password', 'danger'); btn.innerHTML='Login →'; btn.disabled=false; return; }
+    const res = await fetch(`${API}/admin/results`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd })
+    });
+    // Fallback: original GET approach if POST not supported
+    let data;
+    if (res.status === 404 || res.status === 405) {
+      const res2 = await fetch(`${API}/admin/results?password=${encodeURIComponent(pwd)}`);
+      data = await res2.json();
+    } else {
+      data = await res.json();
+    }
+
+    if (!data.success) {
+      IDS.failedLogin(pwd.length);
+      const rem = IDS.MAX_ATTEMPTS - IDS.state.attempts;
+      const msg = rem <= 0 ? '🔒 Too many attempts! Panel locked for 15 minutes.'
+                : rem === 1 ? `❌ Wrong password — ⚠️ LAST ATTEMPT before lockout!`
+                : `❌ Wrong password — ${rem} attempt${rem!==1?'s':''} remaining`;
+      showEl(errEl, msg, 'danger');
+      btn.innerHTML = 'Login →'; btn.disabled = false;
+      return;
+    }
+
+    // ✅ SUCCESS
     adminPassword = pwd;
+    IDS.successLogin();
     document.getElementById('loginSection').classList.add('hidden');
     document.getElementById('adminDashboard').classList.remove('hidden');
     loadModels();
     loadVoters();
     loadResults();
-  } catch(e) { showEl(errEl, '❌ Cannot connect to server', 'danger'); btn.innerHTML='Login →'; btn.disabled=false; }
+    IDS.log('INFO', 'Dashboard accessed — all tabs loaded', 'safe');
+
+  } catch(e) {
+    IDS.log('WARN', `Connection error during login: ${e.message}`, 'warn');
+    showEl(errEl, '❌ Cannot connect to server', 'danger');
+    btn.innerHTML = 'Login →'; btn.disabled = false;
+  }
 }
 
-// ── TABS ──
+// ================================================================
+// TABS
+// ================================================================
 function switchTab(name) {
-  document.querySelectorAll('.tab').forEach((t,i) => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   const tabs = ['register','face','voters','results'];
   const idx = tabs.indexOf(name);
   document.querySelectorAll('.tab')[idx].classList.add('active');
   document.getElementById('tab-' + name).classList.add('active');
-  if (name === 'voters') loadVoters();
+  if (name === 'voters')  loadVoters();
   if (name === 'results') loadResults();
 }
 
-// ── LOAD FACE MODELS ──
+// ================================================================
+// FACE MODELS
+// ================================================================
 async function loadModels() {
   const prog = document.getElementById('modelProgress');
   try {
@@ -418,14 +975,15 @@ async function populateVoterSelect() {
 
 function onVoterSelect() {
   const vid = document.getElementById('faceVoterId').value;
-  const infoAlert = document.getElementById('voterInfoAlert');
   const infoDiv = document.getElementById('selectedVoterInfo');
   if (!vid) { infoDiv.classList.add('hidden'); return; }
-  infoAlert.textContent = `📋 Selected: ${vid} — Camera will capture and auto-save face to database.`;
+  document.getElementById('voterInfoAlert').textContent = `📋 Selected: ${vid} — Camera will capture and auto-save face to database.`;
   infoDiv.classList.remove('hidden');
 }
 
-// ── CAMERA ──
+// ================================================================
+// CAMERA
+// ================================================================
 async function startEnrollCamera() {
   const voterId = document.getElementById('faceVoterId').value;
   if (!voterId) { alert('Please select a voter first!'); return; }
@@ -494,13 +1052,15 @@ function estimateBrightness(video) {
 
 function stopEnrollCamera() {
   if (detectionLoop) { clearInterval(detectionLoop); detectionLoop = null; }
-  if (enrollStream) { enrollStream.getTracks().forEach(t => t.stop()); enrollStream = null; }
+  if (enrollStream)  { enrollStream.getTracks().forEach(t => t.stop()); enrollStream = null; }
   document.getElementById('regVideo').style.display = 'none';
   document.getElementById('camEmoji').style.opacity = '0.2';
   document.getElementById('camRingWrap').classList.remove('scanning');
 }
 
-// ── CAPTURE & SAVE TO DB ──
+// ================================================================
+// CAPTURE & SAVE FACE
+// ================================================================
 async function captureAndSaveFace() {
   if (!currentDescriptor) { alert('No face detected!'); return; }
   const voterId = document.getElementById('faceVoterId').value;
@@ -510,7 +1070,6 @@ async function captureAndSaveFace() {
   btn.innerHTML = '<span class="spinner spinner-dark"></span> Saving to database...'; btn.disabled = true;
   errEl.classList.add('hidden'); successEl.classList.add('hidden');
 
-  // Take one final fresh reading
   const video = document.getElementById('regVideo');
   try {
     const det = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 })).withFaceLandmarks().withFaceDescriptor();
@@ -520,7 +1079,6 @@ async function captureAndSaveFace() {
   stopEnrollCamera();
 
   try {
-    // AUTO-SAVE TO MONGODB — no copy paste needed!
     const res = await fetch(`${API}/admin/save-face`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -533,7 +1091,7 @@ async function captureAndSaveFace() {
       btn.innerHTML = '✅ Capture & Save to Database'; btn.disabled = false;
       return;
     }
-    showEl(successEl, `✅ Face saved for ${voterId} successfully! No copy-paste needed.`, 'success');
+    showEl(successEl, `✅ Face saved for ${voterId} successfully!`, 'success');
     document.getElementById('camStatus').textContent = '✓ SAVED TO DATABASE';
     document.getElementById('camStatus').className = 'cam-status success';
     btn.classList.add('hidden');
@@ -559,18 +1117,20 @@ function retryEnroll() {
   document.getElementById('camStatus').className = 'cam-status';
   document.getElementById('faceEnrollErr').classList.add('hidden');
   document.getElementById('faceEnrollSuccess').classList.add('hidden');
-  setBar('qb1', 0, '#999'); setBar('qb2', 0, '#999'); setBar('qb3', 0, '#999'); setBar('qb4', 0, '#999');
+  setBar('qb1',0,'#999'); setBar('qb2',0,'#999'); setBar('qb3',0,'#999'); setBar('qb4',0,'#999');
 }
 
-// ── REGISTER VOTER ──
+// ================================================================
+// REGISTER VOTER
+// ================================================================
 async function registerVoter() {
   const voterId = document.getElementById('regVoterId').value.trim();
-  const name = document.getElementById('regName').value.trim();
-  const dob = document.getElementById('regDob').value.trim();
-  const mobile = document.getElementById('regMobile').value.trim();
-  const dept = document.getElementById('regDept').value.trim();
-  const year = document.getElementById('regYear').value;
-  const errEl = document.getElementById('regErr');
+  const name    = document.getElementById('regName').value.trim();
+  const dob     = document.getElementById('regDob').value.trim();
+  const mobile  = document.getElementById('regMobile').value.trim();
+  const dept    = document.getElementById('regDept').value.trim();
+  const year    = document.getElementById('regYear').value;
+  const errEl   = document.getElementById('regErr');
   const successEl = document.getElementById('regSuccess');
   errEl.classList.add('hidden'); successEl.classList.add('hidden');
   if (!voterId || !name || !dob || !mobile || !dept) { showEl(errEl, '❌ Please fill all fields', 'danger'); return; }
@@ -584,7 +1144,7 @@ async function registerVoter() {
     const data = await res.json();
     if (!data.success) { showEl(errEl, '❌ ' + data.message, 'danger'); }
     else {
-      showEl(successEl, `✅ ${name} registered! Now go to "Enroll Face" tab to add their face.`, 'success');
+      showEl(successEl, `✅ ${name} registered! Now go to "Enroll Face" tab.`, 'success');
       document.getElementById('regVoterId').value = '';
       document.getElementById('regName').value = '';
       document.getElementById('regDob').value = '';
@@ -596,7 +1156,9 @@ async function registerVoter() {
   finally { btn.innerHTML = 'Register Voter →'; btn.disabled = false; }
 }
 
-// ── LOAD VOTERS TABLE ──
+// ================================================================
+// LOAD VOTERS TABLE
+// ================================================================
 async function loadVoters() {
   try {
     const res = await fetch(`${API}/admin/voters?password=${encodeURIComponent(adminPassword)}`);
@@ -632,7 +1194,9 @@ async function loadVoters() {
   } catch(e) {}
 }
 
-// ── RESULTS ──
+// ================================================================
+// RESULTS
+// ================================================================
 async function loadResults() {
   try {
     const res = await fetch(`${API}/admin/results?password=${encodeURIComponent(adminPassword)}`);
@@ -658,11 +1222,11 @@ async function loadResults() {
       </div>
       ${sorted.map((c, idx) => {
         const pct = total > 0 ? Math.round((c.votes / total) * 100) : 0;
-        const colors = ['#138808', '#000080', '#FF9933'];
+        const colors = ['#138808','#000080','#FF9933'];
         return `
           <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:12px">
             <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-              <div style="font-size:28px">${c.symbol || '🗳️'}</div>
+              <div style="font-size:28px">${c.symbol||'🗳️'}</div>
               <div style="flex:1"><div style="font-weight:700;color:var(--navy)">${c.name}</div><div style="font-size:12px;color:var(--muted)">Class Representative</div></div>
               <div style="text-align:right"><div style="font-size:24px;font-weight:800;color:var(--navy)">${c.votes}</div><div style="font-size:11px;color:var(--muted)">VOTES</div></div>
             </div>
@@ -679,9 +1243,17 @@ async function loadResults() {
   } catch(e) {}
 }
 
+// ================================================================
+// UTILS
+// ================================================================
 function showEl(el, msg, type) {
   el.textContent = msg; el.className = `alert alert-${type}`; el.classList.remove('hidden');
 }
+
+// ================================================================
+// BOOT IDS
+// ================================================================
+IDS.init();
 </script>
 </body>
 </html>
